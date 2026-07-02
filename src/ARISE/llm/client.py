@@ -1,5 +1,56 @@
 """LLM client initialization."""
 
-def initialize_llm_client(model_name: str) -> None:
-    """Initialize the LLM client."""
-    raise NotImplementedError
+from __future__ import annotations
+
+import json
+import re
+
+import boto3
+
+from ARISE.config import AWS_REGION, BEDROCK_MODEL, resolve_bedrock_model_id
+from ARISE.models.schema import AgentAction, parse_actions
+
+
+def extract_json(raw: str) -> str:
+    text = raw.strip()
+    if text.startswith("```"):
+        lines = text.splitlines()[1:]
+        if lines and lines[-1].strip() == "```":
+            lines = lines[:-1]
+        text = "\n".join(lines).strip()
+    match = re.search(r"(\[.*\]|\{.*\})", text, re.DOTALL)
+    return match.group(1) if match else text
+
+
+class BedrockClient:
+    def __init__(self, system_prompt: str, model: str = BEDROCK_MODEL, region: str = AWS_REGION, temperature: float = 0.2, max_tokens: int = 2048,) -> None:
+        self.system_prompt = system_prompt
+        self.model = resolve_bedrock_model_id(model, region)
+        self.region = region
+        self.temperature = temperature
+        self.max_tokens = max_tokens
+        self._client = boto3.client("bedrock-runtime", region_name=region)
+
+    def complete(self, user_message: str) -> str:
+        response = self._client.converse(
+            modelId=self.model,
+            system=[{"text": self.system_prompt}],
+            messages=[{"role": "user", "content": [{"text": user_message}]}],
+            inferenceConfig={
+                "maxTokens": self.max_tokens,
+                "temperature": self.temperature,
+            },
+        )
+        content = response.get("output", {}).get("message", {}).get("content", [])
+        text_parts = [block["text"] for block in content if "text" in block]
+        if text_parts:
+            return "\n".join(text_parts).strip()
+
+        stop_reason = response.get("stopReason", "unknown")
+        raise ValueError(
+            f"Model response did not include text output (stopReason={stop_reason})"
+        )
+
+    def parse_turn(self, user_message: str) -> list[AgentAction]:
+        data = json.loads(extract_json(self.complete(user_message)))
+        return parse_actions(data)
