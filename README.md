@@ -18,15 +18,21 @@ Refine Draft -go around once, each agent refining only their own draft while loo
 
 
 TODOs:
-fill out method stubs in generic agent, nodes, etc. 
+fill out method stubs in generic agent, nodes, etc.
+
 Prompts are currently hardcoded - change this. 
+
+Implement LLM calls
+
 test on synthetic dataset
     test alternative models, prompts, min/max agent counts, refinement passes
     test comparing zero-shot to ARISE system (potentially)
+
 Rewrite README and additional documentation
 
 
 Implement tool calls, w/ hardcoded tool definitions in config or elsewhere
+
 Implement iterative prompt refinement + reinforcement
 
 

@@ -37,7 +37,6 @@ def validate_args(args: argparse.Namespace) -> None:
         raise ValueError("--num-agents must be at least 1.")
     if args.max_agents < args.num_agents:
         raise ValueError("--max-agents must be >= --num-agents.")
-    print(f"args: {args}")
 
 
 def run(args: argparse.Namespace) -> None:
@@ -46,7 +45,9 @@ def run(args: argparse.Namespace) -> None:
         num_agents=args.num_agents,
         max_agents=args.max_agents,
     )
-    graph.run()
+    # For now, return the agents and print
+    final_agents = graph.run()
+    [print("Final Agent", agent, '\n') for agent in final_agents]
 
 
 def main(argv: list[str] | None = None) -> int:

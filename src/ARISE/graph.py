@@ -3,7 +3,6 @@ from __future__ import annotations
 from ARISE.agents.generic_agent import GenericAgent
 from ARISE.nodes.dependency_declaration import run_dependency_declaration
 from ARISE.nodes.draft_agent import run_draft_pass
-from ARISE.nodes.draft_scheduler import select_next_drafter
 from ARISE.nodes.intitialize import create_agents
 from ARISE.nodes.output_refinement import run_output_refinement
 from ARISE.nodes.role_assignment import run_role_assignment
@@ -19,14 +18,9 @@ class ARISEGraph:
 
     def run(self) -> list[GenericAgent]:
         run_role_assignment(self.agents, self.input_text)
-        self.agents = run_role_refinement(
-            self.agents, self.input_text, self.max_agents
-        )
+        run_role_refinement(self.agents, self.input_text, self.max_agents)
         run_dependency_declaration(self.agents, self.input_text)
-
-        while select_next_drafter(self.agents) is not None:
-            run_draft_pass(self.agents, self.input_text)
-
+        run_draft_pass(self.agents, self.input_text)
         run_output_refinement(self.agents, self.input_text)
         return self.agents
 
