@@ -1,5 +1,3 @@
-"""Configuration defaults for ARISE."""
-
 import os
 from pathlib import Path
 

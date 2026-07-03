@@ -4,7 +4,7 @@ from typing import Literal
 
 from ARISE.agents.prompts import build_user_prompt
 from ARISE.llm.client import BedrockClient
-from ARISE.messages import Message
+from ARISE.models.schema import Message
 
 
 class GenericAgent:
@@ -22,7 +22,8 @@ class GenericAgent:
         )
 
     def take_turn(self, inbox: list[Message], agents: list[GenericAgent],) -> tuple[list[Message], list[str]]:
-        print(f"Agent {self.agent_id} taking turn with messages {inbox}")
+        print(f"Agent {self.agent_id} has received the following messages:")
+        [print(message) for message in inbox]
         actions = self.llm.parse_turn(build_user_prompt(inbox, agents, self.agent_id))
 
         outbound: list[Message] = []
@@ -41,5 +42,6 @@ class GenericAgent:
                     )
                 case "create_agent":
                     spawn_roles.append(action.content)
-        print(f"Agent {self.agent_id} taking turn with actions {outbound}")
+        print(f"Agent {self.agent_id} taking turn with actions: ")
+        [print(action) for action in actions]
         return outbound, spawn_roles

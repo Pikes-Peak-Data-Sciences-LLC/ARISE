@@ -26,16 +26,18 @@ class BedrockClient:
     def __init__(self, system_prompt: str, model: str = BEDROCK_MODEL, region: str = AWS_REGION, temperature: float = 0.2, max_tokens: int = 2048,) -> None:
         self.system_prompt = system_prompt
         self.model = resolve_bedrock_model_id(model, region)
+        self.history: list[dict[str, Any]] = []
         self.region = region
         self.temperature = temperature
         self.max_tokens = max_tokens
         self._client = boto3.client("bedrock-runtime", region_name=region)
 
     def complete(self, user_message: str) -> str:
+        new_message = {"role": "user", "content": [{"text": user_message}]}
         response = self._client.converse(
             modelId=self.model,
             system=[{"text": self.system_prompt}],
-            messages=[{"role": "user", "content": [{"text": user_message}]}],
+            messages= self.history + [new_message],
             inferenceConfig={
                 "maxTokens": self.max_tokens,
                 "temperature": self.temperature,
@@ -43,6 +45,9 @@ class BedrockClient:
         )
         content = response.get("output", {}).get("message", {}).get("content", [])
         text_parts = [block["text"] for block in content if "text" in block]
+        assistant_text = "\n".join(text_parts).strip()
+        self.history.append(new_message)
+        self.history.append({"role": "assistant", "content": [{"text": assistant_text}]})
         if text_parts:
             return "\n".join(text_parts).strip()
 

@@ -1,32 +1,28 @@
 from __future__ import annotations
 
 from ARISE.agents.generic_agent import GenericAgent
-from ARISE.agents.prompts import system_prompt
+from ARISE.agents.prompts import system_prompt, role_assignment_prompt
 from ARISE.llm.client import BedrockClient
-from ARISE.messages import Message
+from ARISE.models.schema import Message
 
 
 class ARISEMesh:
     def __init__(self, input_text: str, num_agents: int, max_agents: int) -> None:
         self.input_text = input_text
+        self.num_agents = num_agents
         self.max_agents = max_agents
-        self.agents = [
-            GenericAgent(
-                agent_id=i,
-                llm=BedrockClient(system_prompt(i, num_agents, max_agents, input_text)),
-            )
-            for i in range(num_agents)
-        ]
+        self.agents = [GenericAgent(agent_id=i, llm=BedrockClient(system_prompt(i, num_agents, max_agents, input_text))) for i in range(num_agents)]
         self.mailboxes = {agent.agent_id: [] for agent in self.agents}
         self._max_steps = 1000
 
     def run(self) -> list[GenericAgent]:
-        self.mailboxes[0].append(Message(sender_id=-1, recipient_id=0, content="Begin role assignment."))
+        self.mailboxes[0].append(Message(sender_id=-1, recipient_id=0, content=role_assignment_prompt(self.num_agents)))
         wake = [0]
         steps = 0
 
         while wake and not self.is_done() and steps < self._max_steps:
             agent_id = wake.pop(0)
+            print(f"Agent {agent_id} is waking up.")
             inbox = self.mailboxes[agent_id]
             self.mailboxes[agent_id] = []
 

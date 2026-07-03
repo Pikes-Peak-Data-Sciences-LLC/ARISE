@@ -38,7 +38,9 @@ def main(argv: list[str] | None = None) -> int:
     try:
         args = parse_args(argv)
         mesh = ARISEMesh(args.input_text, args.num_agents, args.max_agents)
-        for agent in mesh.run():
+        final_agents = mesh.run()
+        print('='*50, "Final Output", '='*50)
+        for agent in final_agents:
             print(agent, end="\n\n")
         return 0
     except ValueError as exc:
