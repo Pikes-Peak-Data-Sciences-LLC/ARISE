@@ -18,9 +18,18 @@ def extract_json(raw: str) -> str:
         if lines and lines[-1].strip() == "```":
             lines = lines[:-1]
         text = "\n".join(lines).strip()
-    match = re.search(r"(\[.*\]|\{.*\})", text, re.DOTALL)
-    return match.group(1) if match else text
-
+        if text.lower().startswith("json"):
+            text = text[4:].strip()
+    decoder = json.JSONDecoder()
+    for i, ch in enumerate(text):
+        if ch not in "{[":
+            continue
+        try:
+            _, end = decoder.raw_decode(text, i)
+            return text[i:end]
+        except json.JSONDecodeError:
+            continue
+    return text
 
 class BedrockClient:
     def __init__(self, system_prompt: str, model: str = BEDROCK_MODEL, region: str = AWS_REGION, temperature: float = 0.2, max_tokens: int = 2048,) -> None:

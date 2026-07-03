@@ -37,9 +37,10 @@ class GenericAgent:
                     self.output = action.content
                     self.phase = "done"
                 case "message":
-                    outbound.append(
-                        Message(self.agent_id, action.recipient_id, action.content)
-                    )
+                    if action.recipient_id != self.agent_id: #reject messages to self
+                        outbound.append(
+                            Message(self.agent_id, action.recipient_id, action.content)
+                        )
                 case "create_agent":
                     spawn_roles.append(action.content)
         print(f"Agent {self.agent_id} taking turn with actions: ")
