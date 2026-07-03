@@ -24,6 +24,4 @@ Agent N will then pass a message to the best starting Agent. This agent will cre
 
 -Implement tool/resource calls. Currently, agents have no way to search for information.
 
--Implement cleaner logging step. Currently output is print only, route this to a log file. 
-
 -Clean up prompts

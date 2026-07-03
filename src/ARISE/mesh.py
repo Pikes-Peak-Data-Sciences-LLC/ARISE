@@ -42,7 +42,6 @@ class ARISEMesh:
 
             # if agents need a nudge
             if not wake:
-                print("No agents are waking up. Nudging agents.")
                 for agent in self.agents:
                     if agent.phase == "active":
                         self.mailboxes[agent.agent_id].append(Message(sender_id=-1, recipient_id=agent.agent_id, content=nudge_prompt()))
@@ -50,7 +49,6 @@ class ARISEMesh:
                         break
 
             agent_id = wake.pop(0)
-            print(f"Agent {agent_id} is waking up.")
             inbox = self.mailboxes[agent_id]
             self.mailboxes[agent_id] = []
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import argparse
 import sys
-
+import logging
 from ARISE.config import DEFAULT_AGENTS, MAX_AGENTS
 from ARISE.mesh import ARISEMesh
 
@@ -24,6 +24,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=MAX_AGENTS,
         help=f"Maximum number of agents allowed (default: {MAX_AGENTS}).",
     )
+    parser.add_argument(
+        '--verbose',
+        action='store_true',
+        help='Log all actions and messages.',
+    )
     args = parser.parse_args(argv)
 
     if args.num_agents < 1:
@@ -37,17 +42,18 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 def main(argv: list[str] | None = None) -> int:
     try:
         args = parse_args(argv)
+        logging.basicConfig(filename='arise.log', level=logging.INFO if args.verbose else logging.INFO)
         mesh = ARISEMesh(args.input_text, args.num_agents, args.max_agents)
         final_agents = mesh.run()
-        print('='*50, "Final Output", '='*50)
+        logging.info('='*50, "Final Output", '='*50)
         for agent in final_agents:
-            print(agent, end="\n\n")
+            logging.info(agent)
         return 0
     except ValueError as exc:
-        print(f"error: {exc}", file=sys.stderr)
+        logging.error(f"error: {exc}")
         return 2
     except Exception as exc:
-        print(f"error: {exc}", file=sys.stderr)
+        logging.error(f"error: {exc}")
         return 1
 
 
