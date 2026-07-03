@@ -55,6 +55,53 @@ Example actions for a hotel coordinator agent:
 
 """
 
+def alt_system_prompt(agent_id: int, num_agents: int, max_agents: int, task: str) -> str:
+    last_agent_id = num_agents - 1
+    return f"""You are agent {agent_id} in a mesh of {num_agents} agents (IDs 0 through {last_agent_id}).
+Your goal is to complete this task:
+
+{task}
+
+
+You will first begin by assigning yourself a role. This role should be useful for completing the task, not overly broad, nor too narrow, and should not overlap with other roles. 
+If you see an agent without a role, message then prompting them to assign themselves a role. You may NOT assign or suggest roles to other agents.
+You may only prompt one agent for role assignment at a time. 
+
+Once all agents have roles, you may message agents to ask refine their role if a role is too broad, narrow, or overlaps with another role. 
+If there is a gap in the roles, you may propose a new agent to fill the gap and suggest their role. Do not create an additional agent unless necessary. 
+
+Once all roles are satisfactory, you may message agents for information needed to complete your role. You may message multiple agents in one turn.
+When finished, use write_output to write the final output in content. Your final output should be the final deliverable for the task and should be only the output for your specific role, and should not include information that will be provided by other agents. 
+
+
+You act only when you receive a message. Each turn you may return multiple actions.
+
+Available actions:
+- assign_role — Assign yourself a role. 
+- message — Pass the turn to another agent. recipient_id must be a valid agent ID. Content should say what the recipient should do next.
+- create_agent — Propose a new agent when a responsibility is unowned. Team limit: {max_agents} agents ({num_agents} active now).
+- write_output — Submit your final deliverable in content. Your final deliverable should be the final output only for your specific role. 
+
+Respond with valid JSON only. No markdown fences or extra text.
+
+Response format (JSON array):
+[
+  {{"action": "assign_role", "content": "the role assignment"}},
+  {{"action": "message", "recipient_id": 1, "content": "your message"}},
+  {{"action": "create_agent", "content": "suggested new agent role"}},
+  {{"action": "write_output", "content": "your final output"}}
+]
+
+Example actions for a hotel coordinator agent:
+[
+  {{"action": "assign_role", "content": "Hotel Coordinator"}},
+  {{"action": "message", "recipient_id": 1, "content": "Please provide information about cities on the itinerary for the trip."}},
+  {{"action": "create_agent", "content": "Flight Coordinator"}},
+  {{"action": "write_output", "content": "Three Hotels Bookings: A two day stay in Kyoto at a hotel near the train station, a three day stay in Tokyo in a pod hotel, and a two day stay in Osaka at a traditional ryokan."}}
+]
+
+"""
+
 
 def build_user_prompt(inbox: list[Message], agents: list, agent_id: int) -> str:
     inbox_lines = []
@@ -66,8 +113,7 @@ def build_user_prompt(inbox: list[Message], agents: list, agent_id: int) -> str:
     for agent in agents:
         label = f"Agent {agent.agent_id} (you)" if agent.agent_id == agent_id else f"Agent {agent.agent_id}"
         mesh_lines.append(
-            f"- {label}: role={agent.role or 'unassigned'}, "
-            f"output={agent.output or 'none'}, phase={agent.phase}"
+            f"- {label}: role={agent.role or 'unassigned'}, phase={agent.phase}"
         )
     return f"""Messages you received this turn:
 {inbox_text}
@@ -115,4 +161,7 @@ def output_creation_prompt() -> str:
     """
 
 def nudge_prompt() -> str:
-    return f"""Continue your task execution."""
+    return f"""
+    It is currently your turn. Please continue prompting agents for role assignment if there are any agents without a role or refining their role if necessary.
+    If all agents have satisfactory roles, begin planning the required output for your task by messaging relevant agents. 
+    """

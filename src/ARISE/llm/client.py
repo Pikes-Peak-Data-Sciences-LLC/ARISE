@@ -66,5 +66,10 @@ class BedrockClient:
         )
 
     def parse_turn(self, user_message: str) -> list[AgentAction]:
-        data = json.loads(extract_json(self.complete(user_message)))
+        agent_answer = self.complete(user_message)
+        import logging
+        logger = logging.getLogger(__name__)
+        logging.info(f"Agent Output:{agent_answer}")
+        
+        data = json.loads(extract_json(agent_answer))
         return parse_actions(data)

@@ -19,13 +19,10 @@ class GenericAgent:
 
     def __str__(self) -> str:
         return (
-            f"Agent {self.agent_id}: {self.role}, "
-            f"Output={self.output}, Phase={self.phase}"
+            f"Agent {self.agent_id}: {self.role}, Phase={self.phase}"
         )
 
     def take_turn(self, inbox: list[Message], agents: list[GenericAgent],) -> tuple[list[Message], list[str]]:
-        # print(f"Agent {self.agent_id} has received the following messages:")
-        # [print(message) for message in inbox]
         logging.info(f"Agent {self.agent_id} has received the following messages:")
         [logging.info(message) for message in inbox]
         actions = self.llm.parse_turn(build_user_prompt(inbox, agents, self.agent_id))
@@ -48,6 +45,6 @@ class GenericAgent:
                 case "create_agent":
                     logging.info(f"Agent {self.agent_id} created agent: {action.content}")
                     spawn_roles.append(action.content)
-        # print(f"Agent {self.agent_id} taking turn with actions: ")
-        # [print(action) for action in actions]
+        logging.info(f"Agent {self.agent_id} took turn with actions:")
+        [logging.info(action) for action in actions]
         return outbound, spawn_roles
