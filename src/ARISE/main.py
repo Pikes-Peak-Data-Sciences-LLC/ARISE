@@ -45,8 +45,14 @@ def main(argv: list[str] | None = None) -> int:
         logging.basicConfig(filename='arise.log', level=logging.INFO if args.verbose else logging.INFO)
         mesh = ARISEMesh(args.input_text, args.num_agents, args.max_agents)
         final_agents = mesh.run()
+
+        # temporary print of agents
+        logging.info(f"="* 100)
+        logging.info(f"Final Agents:")
         for agent in final_agents:
-            logging.info(agent)
+            logging.info(f"{agent}")
+        for agent in final_agents:
+            logging.info(f"Agent {agent.agent_id} output: {agent.output}")
         return 0
     except ValueError as exc:
         logging.error(f"error: {exc}")

@@ -11,58 +11,6 @@ Your goal is to complete this task:
 {task}
 
 
-Task Execution will proceed in the following order:
-1. Role assignment — strict relay chain:
-   - Agent 0 assigns a role, then messages Agent 1.
-   - Agent 1 assigns a role, then messages Agent 2.
-   - ...
-   - Agent {last_agent_id} assigns a role and stops (no forward message).
-   Each message must tell the recipient: assign your role, then message Agent {{your_id + 1}}.
-
-2. Role refinement — Agent 0 refines only their own role, then messages agent 1. Continue in order until agent {last_agent_id} refines only their own role. 
-During this phase, agents may optionally spawn new agents where there are gaps in the roles. Do not create an additional agent unless necessary. 
-It it then the job of agent {last_agent_id} to message the best agent to start output.
-
-3. Output Creation — Agents will message relevant agents for information needed to complete their role. Each agent writes their role's deliverable.
- When finished, use write_output to write the final output in content. 
- The final output should be the final deliverable for the task and should be only the output for your specific role. 
-
-You act only when you receive a message. Each turn you may return multiple actions.
-
-Available actions:
-- assign_role — Assign yourself a role. 
-- message — Pass the turn to another agent. recipient_id must be a valid agent ID. Content should say what the recipient should do next.
-- create_agent — Propose a new agent when a responsibility is unowned. Team limit: {max_agents} agents ({num_agents} active now).
-- write_output — Submit your final deliverable in content. Your final deliverable should be the final output only for your specific role. 
-
-Respond with valid JSON only. No markdown fences or extra text.
-
-Response format (JSON array):
-[
-  {{"action": "assign_role", "content": "the role assignment"}},
-  {{"action": "message", "recipient_id": 1, "content": "your message"}},
-  {{"action": "create_agent", "content": "suggested new agent role"}},
-  {{"action": "write_output", "content": "your final output"}}
-]
-
-Example actions for a hotel coordinator agent:
-[
-  {{"action": "assign_role", "content": "Hotel Coordinator"}},
-  {{"action": "message", "recipient_id": 1, "content": "Please provide information about cities on the itinerary for the trip."}},
-  {{"action": "create_agent", "content": "Flight Coordinator"}},
-  {{"action": "write_output", "content": "Three Hotels Bookings: A two day stay in Kyoto at a hotel near the train station, a three day stay in Tokyo in a pod hotel, and a two day stay in Osaka at a traditional ryokan."}}
-]
-
-"""
-
-def alt_system_prompt(agent_id: int, num_agents: int, max_agents: int, task: str) -> str:
-    last_agent_id = num_agents - 1
-    return f"""You are agent {agent_id} in a mesh of {num_agents} agents (IDs 0 through {last_agent_id}).
-Your goal is to complete this task:
-
-{task}
-
-
 You will first begin by assigning yourself a role. This role should be useful for completing the task, not overly broad, nor too narrow, and should not overlap with other roles. 
 If you see an agent without a role, message then prompting them to assign themselves a role. You may NOT assign or suggest roles to other agents.
 You may only prompt one agent for role assignment at a time. 
@@ -76,28 +24,30 @@ When finished, use write_output to write the final output in content. Your final
 
 You act only when you receive a message. Each turn you may return multiple actions.
 
-Available actions:
-- assign_role — Assign yourself a role. 
-- message — Pass the turn to another agent. recipient_id must be a valid agent ID. Content should say what the recipient should do next.
-- create_agent — Propose a new agent when a responsibility is unowned. Team limit: {max_agents} agents ({num_agents} active now).
-- write_output — Submit your final deliverable in content. Your final deliverable should be the final output only for your specific role. 
-
-Respond with valid JSON only. No markdown fences or extra text.
+Available actions (every action must include content and recipient_id; use recipient_id -1 when not messaging or querying):
+- assign_role — Assign yourself a role. Set recipient_id to -1. Content will be only the role title. 
+- message — Pass the turn to another agent. recipient_id must be a valid agent ID. content must say what the recipient should do next.
+- create_agent — Propose a new agent when a responsibility is unowned. Set recipient_id to -1. Team limit: {max_agents} agents ({num_agents} active now).
+- query_output — If an agent's status is "done", query their output. recipient_id must be the target agent ID. Set content to "".
+- write_output — Submit your final deliverable in content. Set recipient_id to -1.
 
 Response format (JSON array):
 [
-  {{"action": "assign_role", "content": "the role assignment"}},
-  {{"action": "message", "recipient_id": 1, "content": "your message"}},
-  {{"action": "create_agent", "content": "suggested new agent role"}},
-  {{"action": "write_output", "content": "your final output"}}
+  {{"action": "assign_role", "recipient_id": -1, "content": "the role title"}},
+  {{"action": "message", "recipient_id": INTEGER, "content": "your message"}},
+  {{"action": "create_agent", "recipient_id": -1, "content": "suggested new agent role"}},
+  {{"action": "query_output", "recipient_id": INTEGER, "content": ""}},
+  {{"action": "write_output", "recipient_id": -1, "content": "your final output"}}
 ]
 
-Example actions for a hotel coordinator agent:
+Example actions for a hotel coordinator agent communicating with iternerary agent with ID 1:
 [
-  {{"action": "assign_role", "content": "Hotel Coordinator"}},
+  {{"action": "assign_role", "recipient_id": -1, "content": "Hotel Coordinator"}},
+  {{"action": "message", "recipient_id": 1, "content": "Please assign yourself a role"}},
   {{"action": "message", "recipient_id": 1, "content": "Please provide information about cities on the itinerary for the trip."}},
-  {{"action": "create_agent", "content": "Flight Coordinator"}},
-  {{"action": "write_output", "content": "Three Hotels Bookings: A two day stay in Kyoto at a hotel near the train station, a three day stay in Tokyo in a pod hotel, and a two day stay in Osaka at a traditional ryokan."}}
+  {{"action": "create_agent", "recipient_id": -1, "content": "Flight Coordinator"}},
+  {{"action": "query_output", "recipient_id": 1, "content": ""}},
+  {{"action": "write_output", "recipient_id": -1, "content": "Three Hotels Bookings: A two day stay in Kyoto at a hotel near the train station, a three day stay in Tokyo in a pod hotel, and a two day stay in Osaka at a traditional ryokan."}}
 ]
 
 """
@@ -113,7 +63,7 @@ def build_user_prompt(inbox: list[Message], agents: list, agent_id: int) -> str:
     for agent in agents:
         label = f"Agent {agent.agent_id} (you)" if agent.agent_id == agent_id else f"Agent {agent.agent_id}"
         mesh_lines.append(
-            f"- {label}: role={agent.role or 'unassigned'}, phase={agent.phase}"
+            f"- {label}: role={agent.role or 'unassigned'}, status={agent.status}"
         )
     return f"""Messages you received this turn:
 {inbox_text}
@@ -123,45 +73,13 @@ Current mesh:
 """
 
 
-
-def role_assignment_prompt(num_agents: int) -> str:
-    last_agent_id = num_agents - 1
-    return f"""Role assignment phase. You are Agent 0. 
-
-    1. Assign yourself a role. 
-    2. Message agent 1 and tell them:
-        - Assign their own role
-        - Include all roles assigned so far and to which agents
-        - Message Agent 2 with the same relay instruction, which will continue in a chain until the agent {last_agent_id}, the final agent.
-
-    Do not suggest or assign roles for other agents. 
-    """
-
-def role_refinement_prompt(num_agents: int) -> str:
-    last_agent_id = num_agents - 1
-    return f"""Role refinement phase. You are Agent 0. 
-
-    1. Refine your own role. Evaluate if there is a gap or overlap in the current roles. 
-    2. Optionally, if there is a gap in the roles that cannot be filled by the current agents, propose a new agent to fill the gap. Do not create an additional agent unless necessary. 
-    3. Message agent 1 and tell them:
-        - Refine their own role
-        - Optionally, propose a new agent to fill a gap in the roles if necessary.
-        - Include all roles assigned so far and to which agents
-        - Message Agent 2 with the same relay instruction, which will continue in a chain until the agent {last_agent_id}, the final agent.
-        - It is the job of the final agent Agent {last_agent_id} to message the best starting agent to start planning and output creation.
-    """
-
-def output_creation_prompt() -> str:
-    return f"""Output creation phase. You are Agent 0. 
-
-    It is your job to begin the output creation process. Message the best starting agent to start planning and output creation.
-    Agents must communicate with one another to gather information needed to complete their roles. 
-    When finished, use write_output to write the final output in content. 
-    The final output should be the final deliverable for the task and should be only the output for your specific role. 
-    """
-
-def nudge_prompt() -> str:
-    return f"""
-    It is currently your turn. Please continue prompting agents for role assignment if there are any agents without a role or refining their role if necessary.
-    If all agents have satisfactory roles, begin planning the required output for your task by messaging relevant agents. 
-    """
+def nudge_prompt(Mesh: ARISEMesh) -> str:
+    if not Mesh.all_agents_have_roles():
+        return f"""
+        It is currently your turn. If you do not have a role, assign yourself a role. If you see an agent without a role, message them to assign themselves a role.
+        """
+    else:
+        return f"""
+        It is currently your turn. Evaluate if all agents have satisfactory roles. If not, prompt agents for role refinement. 
+        If all agents have satisfactory roles, begin planning the required output for your task by messaging relevant agents or writing your output. 
+        """

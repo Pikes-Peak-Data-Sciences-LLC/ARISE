@@ -3,53 +3,65 @@
 from __future__ import annotations
 
 import json
-import re
+import logging
+from typing import Any
 
 import boto3
 
-from ARISE.config import AWS_REGION, BEDROCK_MODEL, resolve_bedrock_model_id
-from ARISE.models.schema import AgentAction, parse_actions
+from ARISE.config import AWS_REGION, BEDROCK_MODEL, MAX_TOKENS, TEMPERATURE, resolve_bedrock_model_id
+from ARISE.models.schema import AgentAction, TurnResponse, parse_actions
+
+logger = logging.getLogger(__name__)
 
 
-def extract_json(raw: str) -> str:
-    text = raw.strip()
-    if text.startswith("```"):
-        lines = text.splitlines()[1:]
-        if lines and lines[-1].strip() == "```":
-            lines = lines[:-1]
-        text = "\n".join(lines).strip()
-        if text.lower().startswith("json"):
-            text = text[4:].strip()
-    decoder = json.JSONDecoder()
-    for i, ch in enumerate(text):
-        if ch not in "{[":
-            continue
-        try:
-            _, end = decoder.raw_decode(text, i)
-            return text[i:end]
-        except json.JSONDecodeError:
-            continue
-    return text
+def _set_additional_properties_false(node: Any) -> None:
+    if isinstance(node, dict):
+        if node.get("type") == "object":
+            node["additionalProperties"] = False
+        for value in node.values():
+            _set_additional_properties_false(value)
+    elif isinstance(node, list):
+        for item in node:
+            _set_additional_properties_false(item)
+
+
+def _bedrock_json_schema() -> str:
+    schema = TurnResponse.model_json_schema()
+    _set_additional_properties_false(schema)
+    return json.dumps(schema)
+
 
 class BedrockClient:
-    def __init__(self, system_prompt: str, model: str = BEDROCK_MODEL, region: str = AWS_REGION, temperature: float = 0.2, max_tokens: int = 2048,) -> None:
+    def __init__(self, system_prompt: str) -> None:
         self.system_prompt = system_prompt
-        self.model = resolve_bedrock_model_id(model, region)
+        self.model = resolve_bedrock_model_id(BEDROCK_MODEL, AWS_REGION)
         self.history: list[dict[str, Any]] = []
-        self.region = region
-        self.temperature = temperature
-        self.max_tokens = max_tokens
-        self._client = boto3.client("bedrock-runtime", region_name=region)
+        self.region = AWS_REGION
+        self.temperature = TEMPERATURE
+        self.max_tokens = MAX_TOKENS
+        self._client = boto3.client("bedrock-runtime", region_name=AWS_REGION)
 
     def complete(self, user_message: str) -> str:
         new_message = {"role": "user", "content": [{"text": user_message}]}
         response = self._client.converse(
             modelId=self.model,
             system=[{"text": self.system_prompt}],
-            messages= self.history + [new_message],
+            messages=self.history + [new_message],
             inferenceConfig={
                 "maxTokens": self.max_tokens,
                 "temperature": self.temperature,
+            },
+            outputConfig={
+                "textFormat": {
+                    "type": "json_schema",
+                    "structure": {
+                        "jsonSchema": {
+                            "name": "turn_actions",
+                            "description": "Actions for the agent's turn",
+                            "schema": _bedrock_json_schema(),
+                        }
+                    },
+                }
             },
         )
         content = response.get("output", {}).get("message", {}).get("content", [])
@@ -58,7 +70,7 @@ class BedrockClient:
         self.history.append(new_message)
         self.history.append({"role": "assistant", "content": [{"text": assistant_text}]})
         if text_parts:
-            return "\n".join(text_parts).strip()
+            return assistant_text
 
         stop_reason = response.get("stopReason", "unknown")
         raise ValueError(
@@ -67,9 +79,10 @@ class BedrockClient:
 
     def parse_turn(self, user_message: str) -> list[AgentAction]:
         agent_answer = self.complete(user_message)
-        import logging
-        logger = logging.getLogger(__name__)
-        logging.info(f"Agent Output:{agent_answer}")
-        
-        data = json.loads(extract_json(agent_answer))
-        return parse_actions(data)
+        logger.info("Agent Output: %s", agent_answer)
+        try:
+            return parse_actions(json.loads(agent_answer))
+        except Exception as e:
+            logger.error(f"Error parsing JSON response: {e}")
+            logger.error(f"Agent answer: {agent_answer}")
+            raise e

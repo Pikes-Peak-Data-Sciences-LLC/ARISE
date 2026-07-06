@@ -17,17 +17,20 @@ def load_env_file(path: Path) -> None:
 
 load_env_file(Path(__file__).resolve().parents[2] / ".env")
 
-DEFAULT_AGENTS = 5
+DEFAULT_AGENTS = 3
+MAX_STEPS = 1000
+MAX_TOKENS = 2048
+TEMPERATURE = 0.2
 MAX_AGENTS = 10
 AWS_REGION = os.getenv("AWS_REGION", "us-west-2")
-BEDROCK_MODEL = os.getenv("BEDROCK_MODEL", "amazon.nova-2-lite-v1:0")
+BEDROCK_MODEL = os.getenv("BEDROCK_MODEL", "anthropic.claude-haiku-4-5-20251001-v1:0")
 
 
 def resolve_bedrock_model_id(model: str, region: str) -> str:
-    """Map bare Nova model IDs to Bedrock inference profile IDs."""
-    if model.startswith(("arn:", "us.", "eu.", "ap.")):
+    """Map bare foundation model IDs to Bedrock inference profile IDs."""
+    if model.startswith(("arn:", "us.", "eu.", "ap.", "global.")):
         return model
-    if model.startswith("amazon."):
+    if model.startswith(("amazon.", "anthropic.")):
         geo = region.split("-")[0]
         return f"{geo}.{model}"
     return model
