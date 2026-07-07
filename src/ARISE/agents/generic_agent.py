@@ -4,14 +4,16 @@ from typing import Literal
 
 from ARISE.agents.prompts import build_user_prompt
 from ARISE.llm.client import BedrockClient
+from ARISE.mcp.manager import MCPManager, parse_tool_call
 from ARISE.models.schema import Message
 import logging
 
 
 class GenericAgent:
-    def __init__(self, agent_id: int, llm: BedrockClient) -> None:
+    def __init__(self, agent_id: int, llm: BedrockClient, mcp: MCPManager | None = None) -> None:
         self.agent_id = agent_id
         self.llm = llm
+        self.mcp = mcp
         self.role: str | None = None
         self.output: str | None = None
         self.status: Literal["active", "done"] = "active"
@@ -57,10 +59,39 @@ class GenericAgent:
                             requested_agent = agent
                             requested_output = agent.output
                             break
-                    if requested_agent.status == "done":
+                    if requested_agent is None:
+                        logging.error(f"Agent {self.agent_id} requested output from Agent {action.recipient_id}, but they do not exist.")
+                    elif requested_agent.status == "done":
                         outbound.append(Message(self.agent_id, self.agent_id, f"Requested output from Agent {action.recipient_id}: {requested_output}"))
                     else:
                         logging.info(f"Agent {self.agent_id} requested output from Agent {action.recipient_id}, but they are not done.")
-                    if requested_agent is None:
-                        logging.error(f"Agent {self.agent_id} requested output from Agent {action.recipient_id}, but they do not exist.")
+
+                case "call_tool":
+                    if self.mcp is None:
+                        logging.error(f"Agent {self.agent_id} called a tool, but MCP is not configured.")
+                        outbound.append(Message(self.agent_id, self.agent_id, "Tool error: MCP is not configured."))
+                        continue
+                    try:
+                        server_id, tool_name, arguments = parse_tool_call(action.content)
+                        logging.info(
+                            "Agent %s called tool %s/%s with args %s",
+                            self.agent_id,
+                            server_id,
+                            tool_name,
+                            arguments,
+                        )
+                        result = self.mcp.call_tool(server_id, tool_name, arguments)
+                        outbound.append(
+                            Message(
+                                self.agent_id,
+                                self.agent_id,
+                                f"Tool result ({server_id}/{tool_name}): {result}",
+                            )
+                        )
+                    except Exception as exc:
+                        logging.error("Agent %s tool call failed: %s", self.agent_id, exc)
+                        outbound.append(
+                            Message(self.agent_id, self.agent_id, f"Tool error ({action.content}): {exc}")
+                        )
+
         return outbound, spawn_roles

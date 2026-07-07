@@ -42,11 +42,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 def main(argv: list[str] | None = None) -> int:
     try:
         args = parse_args(argv)
-        logging.basicConfig(filename='arise.log', level=logging.INFO if args.verbose else logging.INFO)
         mesh = ARISEMesh(args.input_text, args.num_agents, args.max_agents)
+        logging.basicConfig(filename='arise.log', level=logging.INFO if args.verbose else logging.INFO) #verbose doesnt do anything right now
+        logging.info(f"="* 100)
+        logging.info(f"Starting ARISE")
+        logging.info(f"="* 100)
         final_agents = mesh.run()
 
-        # temporary print of agents
+        # log final outputs of agents
         logging.info(f"="* 100)
         logging.info(f"Final Agents:")
         for agent in final_agents:

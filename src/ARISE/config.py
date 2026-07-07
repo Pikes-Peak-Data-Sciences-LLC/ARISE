@@ -15,7 +15,10 @@ def load_env_file(path: Path) -> None:
         os.environ.setdefault(key, value)
 
 
-load_env_file(Path(__file__).resolve().parents[2] / ".env")
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+load_env_file(PROJECT_ROOT / ".env")
+
+MCP_SERVERS_PATH = PROJECT_ROOT / "mcp_server.yaml"
 
 DEFAULT_AGENTS = 3
 MAX_STEPS = 1000

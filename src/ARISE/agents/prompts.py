@@ -3,7 +3,7 @@ from __future__ import annotations
 from ARISE.models.schema import Message
 
 
-def system_prompt(agent_id: int, num_agents: int, max_agents: int, task: str) -> str:
+def system_prompt(agent_id: int, num_agents: int, max_agents: int, task: str, tools: str = "None.",) -> str:
     last_agent_id = num_agents - 1
     return f"""You are agent {agent_id} in a mesh of {num_agents} agents (IDs 0 through {last_agent_id}).
 Your goal is to complete this task:
@@ -30,25 +30,31 @@ Available actions (every action must include content and recipient_id; use recip
 - create_agent — Propose a new agent when a responsibility is unowned. Set recipient_id to -1. Team limit: {max_agents} agents ({num_agents} active now).
 - query_output — If an agent's status is "done", query their output. recipient_id must be the target agent ID. Set content to "".
 - write_output — Submit your final deliverable in content. Set recipient_id to -1.
+- call_tool — Call an MCP tool. Set recipient_id to -1. Content must be a JSON string with server, tool, and args keys.
+
+Tools available (server/tool_name):
+{tools}
 
 Response format (JSON array):
-[
+{{'actions': [
   {{"action": "assign_role", "recipient_id": -1, "content": "the role title"}},
   {{"action": "message", "recipient_id": INTEGER, "content": "your message"}},
   {{"action": "create_agent", "recipient_id": -1, "content": "suggested new agent role"}},
   {{"action": "query_output", "recipient_id": INTEGER, "content": ""}},
+  {{"action": "call_tool", "recipient_id": -1, "content": "{{"server": "server", "tool": "tool_name", "args": {{"arg1": "value1"}}}}"}},
   {{"action": "write_output", "recipient_id": -1, "content": "your final output"}}
-]
+]}}
 
 Example actions for a hotel coordinator agent communicating with iternerary agent with ID 1:
-[
+{{'actions': [
   {{"action": "assign_role", "recipient_id": -1, "content": "Hotel Coordinator"}},
   {{"action": "message", "recipient_id": 1, "content": "Please assign yourself a role"}},
   {{"action": "message", "recipient_id": 1, "content": "Please provide information about cities on the itinerary for the trip."}},
   {{"action": "create_agent", "recipient_id": -1, "content": "Flight Coordinator"}},
   {{"action": "query_output", "recipient_id": 1, "content": ""}},
+  {{"action": "call_tool", "recipient_id": -1, "content": "{{"server": "weather", "tool": "get_weather_forecast", "args": {{"city": "Osaka", "days": 5}}}}"}},
   {{"action": "write_output", "recipient_id": -1, "content": "Three Hotels Bookings: A two day stay in Kyoto at a hotel near the train station, a three day stay in Tokyo in a pod hotel, and a two day stay in Osaka at a traditional ryokan."}}
-]
+]}}
 
 """
 
@@ -73,13 +79,12 @@ Current mesh:
 """
 
 
-def nudge_prompt(Mesh: ARISEMesh) -> str:
-    if not Mesh.all_agents_have_roles():
-        return f"""
+def nudge_prompt(mesh) -> str:
+    if not mesh.all_agents_have_roles():
+        return """
         It is currently your turn. If you do not have a role, assign yourself a role. If you see an agent without a role, message them to assign themselves a role.
         """
-    else:
-        return f"""
+    return """
         It is currently your turn. Evaluate if all agents have satisfactory roles. If not, prompt agents for role refinement. 
-        If all agents have satisfactory roles, begin planning the required output for your task by messaging relevant agents or writing your output. 
+        If all agents have satisfactory roles, begin planning the required output for your task by messaging relevant agents, calling tools, or writing your output. 
         """

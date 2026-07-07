@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import logging
+
 from ARISE.agents.generic_agent import GenericAgent
-from ARISE.agents.prompts import *
-from ARISE.llm.client import BedrockClient
-from ARISE.models.schema import Message
+from ARISE.agents.prompts import nudge_prompt, system_prompt
 from ARISE.config import MAX_STEPS
+from ARISE.llm.client import BedrockClient
+from ARISE.mcp import MCPManager, load_mcp_servers
+from ARISE.models.schema import Message
 
 
 class ARISEMesh:
@@ -12,7 +15,17 @@ class ARISEMesh:
         self.input_text = input_text
         self.num_agents = num_agents
         self.max_agents = max_agents
-        self.agents = [GenericAgent(agent_id=i, llm=BedrockClient(system_prompt(i, num_agents, max_agents, input_text))) for i in range(num_agents)]
+        self.mcp = MCPManager(load_mcp_servers())
+        self.mcp.start()
+        tools_prompt = self.mcp.tools_prompt()
+        self.agents = [
+            GenericAgent(
+                agent_id=i,
+                llm=BedrockClient(system_prompt(i, num_agents, max_agents, input_text, tools_prompt)),
+                mcp=self.mcp,
+            )
+            for i in range(num_agents)
+        ]
         self.mailboxes = {agent.agent_id: [] for agent in self.agents}
         self._max_steps = MAX_STEPS
 
@@ -23,49 +36,53 @@ class ARISEMesh:
         return all(agent.role is not None for agent in self.agents)
 
     def run(self) -> list[GenericAgent]:
-        self.mailboxes[0].append(Message(sender_id=-1, recipient_id=0, content="Begin by assigning yourself a role."))
-        wake = [0]
-        steps = 0
+        try:
+            self.mailboxes[0].append(Message(sender_id=-1, recipient_id=0, content="Begin by assigning yourself a role."))
+            wake = [0]
+            steps = 0
 
-        while (wake or not self.agents_finished()) and steps < self._max_steps:
-            # if agents need a nudge, message first active agent to nudge. 
-            if not wake:
-                for agent in self.agents:
-                    if agent.status == "active":
-                        self.mailboxes[agent.agent_id].append(Message(sender_id=-1, recipient_id=agent.agent_id, content=nudge_prompt(self)))
-                        wake.append(agent.agent_id)
-                        break
+            while (wake or not self.agents_finished()) and steps < self._max_steps:
+                if not wake:
+                    for agent in self.agents:
+                        if agent.status == "active":
+                            self.mailboxes[agent.agent_id].append(
+                                Message(sender_id=-1, recipient_id=agent.agent_id, content=nudge_prompt(self))
+                            )
+                            wake.append(agent.agent_id)
+                            break
 
-            agent_id = wake.pop(0)
-            inbox = self.mailboxes[agent_id]
-            self.mailboxes[agent_id] = []
+                agent_id = wake.pop(0)
+                inbox = self.mailboxes[agent_id]
+                self.mailboxes[agent_id] = []
 
-            if not inbox:
-                steps += 1
-                continue
-
-            outbound, spawn_roles = self.agents[agent_id].take_turn(inbox, self.agents)
-
-            for message in outbound:
-                if message.recipient_id < 0 or message.recipient_id >= len(self.agents):
-                    logging.error(f"Invalid recipient id: {message.recipient_id}")
+                if not inbox:
+                    steps += 1
                     continue
-                self.mailboxes[message.recipient_id].append(message)
-                wake.append(message.recipient_id)
 
-            for role in spawn_roles:
-                self.spawn_agent(role)
+                outbound, spawn_roles = self.agents[agent_id].take_turn(inbox, self.agents)
 
-            steps += 1
+                for message in outbound:
+                    if message.recipient_id < 0 or message.recipient_id >= len(self.agents):
+                        logging.error(f"Invalid recipient id: {message.recipient_id}")
+                        continue
+                    self.mailboxes[message.recipient_id].append(message)
+                    wake.append(message.recipient_id)
 
-        return self.agents
+                for role in spawn_roles:
+                    self.spawn_agent(role)
+
+                steps += 1
+
+            return self.agents
+        finally:
+            self.mcp.stop()
 
     def spawn_agent(self, _role: str) -> None:
         if len(self.agents) >= self.max_agents:
             return
         new_id = len(self.agents)
         llm = BedrockClient(
-            system_prompt(new_id, new_id + 1, self.max_agents, self.input_text)
+            system_prompt(new_id, new_id + 1, self.max_agents, self.input_text, self.mcp.tools_prompt())
         )
-        self.agents.append(GenericAgent(agent_id=new_id, llm=llm))
+        self.agents.append(GenericAgent(agent_id=new_id, llm=llm, mcp=self.mcp))
         self.mailboxes[new_id] = []
