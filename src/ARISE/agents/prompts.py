@@ -12,25 +12,27 @@ Your goal is to complete this task:
 
 
 You will first begin by assigning yourself a role. This role should be useful for completing the task, not overly broad, nor too narrow, and should not overlap with other roles. 
-If you see an agent without a role, message then prompting them to assign themselves a role. You may NOT assign or suggest roles to other agents.
+If you see an agent without a role, message them prompting them to assign themselves a role. You may NOT assign or suggest roles to other agents.
 You may only prompt one agent for role assignment at a time. 
 
 Once all agents have roles, you may message agents to ask refine their role if a role is too broad, narrow, or overlaps with another role. 
+Ex. 'Hotel and Travel Coordinator' is too broad, and should be split into two separate roles. 'Tokyo Hotel Coordinator' and 'Kyoto Hotel Coordinator' are too narrow, and should be combined into one role unless the task requires separate coordination for each city.
+'Iternary Coordinator' and 'Travel Planner' overlap too much, and one agent should be directed to change their role. 
 If there is a gap in the roles, you may propose a new agent to fill the gap and suggest their role. Do not create an additional agent unless necessary. 
 
 Once all roles are satisfactory, you may message agents for information needed to complete your role. You may message multiple agents in one turn.
-When finished, use write_output to write the final output in content. Your final output should be the final deliverable for the task and should be only the output for your specific role, and should not include information that will be provided by other agents. 
+When finished, use write_output to write the final output in content. Your final output should be the final concise deliverable for the task and should be only the output for your specific role, and should not include information that will be provided by other agents or irrelevant information. 
 
 
 You act only when you receive a message. Each turn you may return multiple actions.
 
 Available actions (every action must include content and recipient_id; use recipient_id -1 when not messaging or querying):
 - assign_role — Assign yourself a role. Set recipient_id to -1. Content will be only the role title. 
-- message — Pass the turn to another agent. recipient_id must be a valid agent ID. content must say what the recipient should do next.
+- message — Pass the turn to another agent. recipient_id must be a valid agent ID. Content should be the message to the recipient.
 - create_agent — Propose a new agent when a responsibility is unowned. Set recipient_id to -1. Team limit: {max_agents} agents ({num_agents} active now).
 - query_output — If an agent's status is "done", query their output. recipient_id must be the target agent ID. Set content to "".
 - write_output — Submit your final deliverable in content. Set recipient_id to -1.
-- call_tool — Call an MCP tool. Set recipient_id to -1. Content must be a JSON string with server, tool, and args keys.
+- call_tool — Call an MCP tool. Set recipient_id to -1. Content must be a JSON string with server, tool, and args.
 
 Tools available (server/tool_name):
 {tools}
@@ -53,7 +55,7 @@ Example actions for a hotel coordinator agent communicating with iternerary agen
   {{"action": "create_agent", "recipient_id": -1, "content": "Flight Coordinator"}},
   {{"action": "query_output", "recipient_id": 1, "content": ""}},
   {{"action": "call_tool", "recipient_id": -1, "content": "{{"server": "weather", "tool": "get_weather_forecast", "args": {{"city": "Osaka", "days": 5}}}}"}},
-  {{"action": "write_output", "recipient_id": -1, "content": "Three Hotels Bookings: A two day stay in Kyoto at a hotel near the train station, a three day stay in Tokyo in a pod hotel, and a two day stay in Osaka at a traditional ryokan."}}
+  {{"action": "write_output", "recipient_id": -1, "content": "Three Hotel Bookings: A two day stay in Kyoto at a hotel near the train station, a three day stay in Tokyo in a pod hotel, and a two day stay in Osaka at a traditional ryokan."}}
 ]}}
 
 """

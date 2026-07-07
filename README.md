@@ -53,7 +53,7 @@ mesh.py -contains all agent objects, runs message and turn taking behavior
 
 ### TODOs:
 
--Implement tool/resource calls or at least simulate them (!)
+-Add trvl mcp server for hotel and flight pricing
 
 -Improve nudges. Agents can sometimes recieve a nudge message when important messages are in queue.
 

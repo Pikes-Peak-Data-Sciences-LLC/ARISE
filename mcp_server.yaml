@@ -7,10 +7,10 @@ servers:
       - "-m"
       - "ARISE.mcp.servers.weather"
 
-  # trvl:
-  #   enabled: false
-  #   description: "Flights, hotels, trains — requires trvl binary or npx"
-  #   command: npx
-  #   args:
-  #     - "-y"
-  #     - "trvl-mcp"
+  trvl:
+    enabled: false
+    description: "Flights, hotels, trains — requires trvl binary or npx"
+    command: npx
+    args:
+      - "-y"
+      - "trvl-mcp"

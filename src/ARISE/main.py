@@ -47,6 +47,7 @@ def main(argv: list[str] | None = None) -> int:
         logging.info(f"="* 100)
         logging.info(f"Starting ARISE")
         logging.info(f"="* 100)
+        logging.info(f"Input text: {args.input_text}")
         final_agents = mesh.run()
 
         # log final outputs of agents
