@@ -1,16 +1,7 @@
 servers:
   weather:
     enabled: true
-    description: "Weather forecasts via Open-Meteo (free, no API key)"
     command: python
     args:
       - "-m"
       - "ARISE.mcp.servers.weather"
-
-  trvl:
-    enabled: false
-    description: "Flights, hotels, trains — requires trvl binary or npx"
-    command: npx
-    args:
-      - "-y"
-      - "trvl-mcp"

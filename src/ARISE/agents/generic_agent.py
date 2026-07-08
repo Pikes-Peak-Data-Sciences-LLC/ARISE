@@ -27,7 +27,7 @@ class GenericAgent:
     def take_turn(self, inbox: list[Message], agents: list[GenericAgent],) -> tuple[list[Message], list[str]]:
         logging.info(f"Agent {self.agent_id} ({self.role}) has received the following messages:")
         [logging.info(message) for message in inbox]
-        actions = self.llm.parse_turn(build_user_prompt(inbox, agents, self.agent_id))
+        actions = self.llm.parse_turn(build_user_prompt(inbox, agents,self.agent_id))
 
         outbound: list[Message] = []
         spawn_roles: list[str] = []

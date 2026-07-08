@@ -3,10 +3,11 @@ from __future__ import annotations
 import logging
 
 from ARISE.agents.generic_agent import GenericAgent
-from ARISE.agents.prompts import nudge_prompt, system_prompt
-from ARISE.config import MAX_STEPS
+from ARISE.agents.prompts import nudge_prompt, rework_prompt, system_prompt
+from ARISE.config import MAX_STEPS, REWORK_PASSES
 from ARISE.llm.client import BedrockClient
-from ARISE.mcp import MCPManager, load_mcp_servers
+from ARISE.mcp.registry import load_mcp_servers
+from ARISE.mcp.manager import MCPManager
 from ARISE.models.schema import Message
 
 
@@ -28,6 +29,7 @@ class ARISEMesh:
         ]
         self.mailboxes = {agent.agent_id: [] for agent in self.agents}
         self._max_steps = MAX_STEPS
+        self.rework_round = 0
 
     def agents_finished(self) -> bool:
         return all(agent.status == "done" for agent in self.agents)
@@ -35,43 +37,68 @@ class ARISEMesh:
     def all_agents_have_roles(self) -> bool:
         return all(agent.role is not None for agent in self.agents)
 
+    def _run_round(self, wake: list[int], steps: int) -> tuple[list[int], int]:
+        while (wake or not self.agents_finished()) and steps < self._max_steps:
+            if not wake:
+                for agent in self.agents:
+                    if agent.status == "active":
+                        self.mailboxes[agent.agent_id].append(
+                            Message(sender_id=-1, recipient_id=agent.agent_id, content=nudge_prompt(self))
+                        )
+                        wake.append(agent.agent_id)
+                        break
+
+            agent_id = wake.pop(0)
+            inbox = self.mailboxes[agent_id]
+            self.mailboxes[agent_id] = []
+
+            if not inbox:
+                steps += 1
+                continue
+
+            outbound, spawn_roles = self.agents[agent_id].take_turn(inbox, self.agents)
+
+            for message in outbound:
+                if message.recipient_id < 0 or message.recipient_id >= len(self.agents):
+                    logging.error(f"Invalid recipient id: {message.recipient_id}")
+                    continue
+                self.mailboxes[message.recipient_id].append(message)
+                wake.append(message.recipient_id)
+
+            for role in spawn_roles:
+                self.spawn_agent(role)
+
+            steps += 1
+
+        return wake, steps
+
+    def _start_rework(self) -> list[int]:
+        self.rework_round += 1
+        logging.info("Starting rework pass %s of %s", self.rework_round, REWORK_PASSES)
+        wake: list[int] = []
+        for agent in self.agents:
+            agent.status = "active"
+            self.mailboxes[agent.agent_id].append(Message(sender_id=-1, recipient_id=agent.agent_id, content=rework_prompt(self, agent.agent_id)))
+            wake.append(agent.agent_id)
+        return wake
+
     def run(self) -> list[GenericAgent]:
         try:
-            self.mailboxes[0].append(Message(sender_id=-1, recipient_id=0, content="Begin by assigning yourself a role."))
+            self.mailboxes[0].append(
+                Message(sender_id=-1, recipient_id=0, content="Begin by assigning yourself a role.")
+            )
             wake = [0]
             steps = 0
 
-            while (wake or not self.agents_finished()) and steps < self._max_steps:
-                if not wake:
-                    for agent in self.agents:
-                        if agent.status == "active":
-                            self.mailboxes[agent.agent_id].append(
-                                Message(sender_id=-1, recipient_id=agent.agent_id, content=nudge_prompt(self))
-                            )
-                            wake.append(agent.agent_id)
-                            break
+            while True:
+                wake, steps = self._run_round(wake, steps)
 
-                agent_id = wake.pop(0)
-                inbox = self.mailboxes[agent_id]
-                self.mailboxes[agent_id] = []
+                if not self.agents_finished():
+                    break
+                if self.rework_round >= REWORK_PASSES:
+                    break
 
-                if not inbox:
-                    steps += 1
-                    continue
-
-                outbound, spawn_roles = self.agents[agent_id].take_turn(inbox, self.agents)
-
-                for message in outbound:
-                    if message.recipient_id < 0 or message.recipient_id >= len(self.agents):
-                        logging.error(f"Invalid recipient id: {message.recipient_id}")
-                        continue
-                    self.mailboxes[message.recipient_id].append(message)
-                    wake.append(message.recipient_id)
-
-                for role in spawn_roles:
-                    self.spawn_agent(role)
-
-                steps += 1
+                wake = self._start_rework()
 
             return self.agents
         finally:

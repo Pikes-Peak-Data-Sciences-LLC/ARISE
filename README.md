@@ -1,6 +1,5 @@
 # Agentic Planner
 
-
 ## Broad Structure:
 
 Begin by creating N agents. Starting at agent 0, have them assign themselves a role, and pass a message on to any agent without a role. Agents will prompt for roles until all agents have assigned *themselves* a role. Agents have the option to prompt another agent to refine their role, or to spawn an additional agent if required. 
@@ -53,18 +52,18 @@ mesh.py -contains all agent objects, runs message and turn taking behavior
 
 ### TODOs:
 
--Add trvl mcp server for hotel and flight pricing
+-Simulate more tool calls
+
+-Agents need the ability to delete other agents
+
+-Error handling long context window, and when response > max tokens
 
 -Improve nudges. Agents can sometimes recieve a nudge message when important messages are in queue.
 
--Improve token efficiency. Agents currently see their entire conversation history, which gets expensive. 
+-Improve token efficiency. Agents currently see their entire conversation history, which gets expensive. Only remember up to a certain point.
 
 -Increase safeguards. ie. agents should not be able to write output twice in one turn, or message the same agent twice in one turn.
 
--General efficiency improvements. 
-
 -Max steps safeguard. Right before max steps, agents should be forced to make output. 
-
--potentially add ability to remove agents?. If we start with 5 and the task only requires 2, we waste a lot of time and resources. 
 
 -Create visualization and/or improved output viewing. All outputs currently go to log file, which is messy. 

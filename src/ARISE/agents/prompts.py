@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+from ARISE.config import REWORK_PASSES
 from ARISE.models.schema import Message
 
 
 def system_prompt(agent_id: int, num_agents: int, max_agents: int, task: str, tools: str = "None.",) -> str:
     last_agent_id = num_agents - 1
-    return f"""You are agent {agent_id} in a mesh of {num_agents} agents (IDs 0 through {last_agent_id}).
+    prompt =f"""You are agent {agent_id} in a mesh of {num_agents} agents (IDs 0 through {last_agent_id}).
 Your goal is to complete this task:
 
 {task}
@@ -18,10 +19,11 @@ You may only prompt one agent for role assignment at a time.
 Once all agents have roles, you may message agents to ask refine their role if a role is too broad, narrow, or overlaps with another role. 
 Ex. 'Hotel and Travel Coordinator' is too broad, and should be split into two separate roles. 'Tokyo Hotel Coordinator' and 'Kyoto Hotel Coordinator' are too narrow, and should be combined into one role unless the task requires separate coordination for each city.
 'Iternary Coordinator' and 'Travel Planner' overlap too much, and one agent should be directed to change their role. 
-If there is a gap in the roles, you may propose a new agent to fill the gap and suggest their role. Do not create an additional agent unless necessary. 
+If there is a gap in the roles, you may propose a new agent to fill the gap and suggest their role.
 
-Once all roles are satisfactory, you may message agents for information needed to complete your role. You may message multiple agents in one turn.
-When finished, use write_output to write the final output in content. Your final output should be the final concise deliverable for the task and should be only the output for your specific role, and should not include information that will be provided by other agents or irrelevant information. 
+If all roles are satisfactory, you may message agents in order to complete the task. You may message multiple agents in one turn.
+You are encouraged to critique the work of other agents, as well as ask agents to refine their role if necessary. 
+When finished, use write_output to write the final output in content. Your final output should be the final concise deliverable for the task and should be only the output for your specific role, and should not include information that will be provided by other agents or extraneous information. 
 
 
 You act only when you receive a message. Each turn you may return multiple actions.
@@ -47,37 +49,43 @@ Response format (JSON array):
   {{"action": "write_output", "recipient_id": -1, "content": "your final output"}}
 ]}}
 
-Example actions for a hotel coordinator agent communicating with iternerary agent with ID 1:
+Example actions for a weather agent communicating with iternerary agent with ID 1:
 {{'actions': [
-  {{"action": "assign_role", "recipient_id": -1, "content": "Hotel Coordinator"}},
+  {{"action": "assign_role", "recipient_id": -1, "content": "Weather Agent"}},
   {{"action": "message", "recipient_id": 1, "content": "Please assign yourself a role"}},
   {{"action": "message", "recipient_id": 1, "content": "Please provide information about cities on the itinerary for the trip."}},
   {{"action": "create_agent", "recipient_id": -1, "content": "Flight Coordinator"}},
   {{"action": "query_output", "recipient_id": 1, "content": ""}},
-  {{"action": "call_tool", "recipient_id": -1, "content": "{{"server": "weather", "tool": "get_weather_forecast", "args": {{"city": "Osaka", "days": 5}}}}"}},
-  {{"action": "write_output", "recipient_id": -1, "content": "Three Hotel Bookings: A two day stay in Kyoto at a hotel near the train station, a three day stay in Tokyo in a pod hotel, and a two day stay in Osaka at a traditional ryokan."}}
+  {{"action": "call_tool", "recipient_id": -1, "content": "{{"server": "weather", "tool": "get_weather_forecast", "args": {{"city": "Osaka", "days": 1}}}}"}},
+  {{"action": "write_output", "recipient_id": -1, "content": "Weather Forecast for June 15th-19th: June 15th in Osaka: 25°C, sunny with a chance of rain. \nJune 16th in Kyoto: 22°C, cloudy with a chance of rain..."}}
 ]}}
 
 """
+    return prompt
 
 
-def build_user_prompt(inbox: list[Message], agents: list, agent_id: int) -> str:
-    inbox_lines = []
-    for message in inbox:
-        sender = "system" if message.sender_id == -1 else f"Agent {message.sender_id}"
-        inbox_lines.append(f"- {sender}: {message.content}")
-    inbox_text = "\n".join(inbox_lines) if inbox_lines else "None."
+def get_mesh_state(agents: List[GenericAgent], agent_id: int) -> str:
     mesh_lines = []
     for agent in agents:
         label = f"Agent {agent.agent_id} (you)" if agent.agent_id == agent_id else f"Agent {agent.agent_id}"
         mesh_lines.append(
             f"- {label}: role={agent.role or 'unassigned'}, status={agent.status}"
         )
+    return "\n".join(mesh_lines)
+
+
+def build_user_prompt(inbox: list[Message], agents: List[GenericAgent], agent_id: int) -> str:
+    inbox_lines = []
+    for message in inbox:
+        sender = "system" if message.sender_id == -1 else f"Agent {message.sender_id}"
+        inbox_lines.append(f"- {sender}: {message.content}")
+    inbox_text = "\n".join(inbox_lines) if inbox_lines else "None."
+    
     return f"""Messages you received this turn:
 {inbox_text}
 
 Current mesh:
-{"\n".join(mesh_lines)}
+{get_mesh_state(agents, agent_id)}
 """
 
 
@@ -90,3 +98,26 @@ def nudge_prompt(mesh) -> str:
         It is currently your turn. Evaluate if all agents have satisfactory roles. If not, prompt agents for role refinement. 
         If all agents have satisfactory roles, begin planning the required output for your task by messaging relevant agents, calling tools, or writing your output. 
         """
+
+def rework_prompt(mesh, agent_id: int) -> str:
+    output_lines = [
+        f"- Agent {agent.agent_id} ({agent.role}): {agent.output}"
+        for agent in mesh.agents
+    ]
+    return f"""Rework round {mesh.rework_round} of {REWORK_PASSES}.
+
+Original task:
+{mesh.input_text}
+
+Team outputs from the previous round:
+{'\n'.join(output_lines)}
+
+----------------------------------------------------------------------------------------------------
+
+Review the team's work against the task for gaps, overlap, and quality issues.
+If your role should change, use assign_role with an updated title.
+Then rework your deliverable by messaging agents, calling tools, or writing output.
+
+Current mesh:
+{get_mesh_state(mesh.agents, agent_id)}
+"""
