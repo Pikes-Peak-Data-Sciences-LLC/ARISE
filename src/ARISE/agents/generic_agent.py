@@ -6,6 +6,7 @@ from ARISE.agents.prompts import build_user_prompt
 from ARISE.llm.client import BedrockClient
 from ARISE.mcp.manager import MCPManager, parse_tool_call
 from ARISE.models.schema import Message
+from ARISE.config import OUTPUT_CHARACTER_LIMIT
 import logging
 
 
@@ -35,24 +36,33 @@ class GenericAgent:
             match action.action:
                 case "assign_role":
                     logging.info(f"Agent {self.agent_id} assigned role: {action.content}")
-                    self.role = action.content
+                    self.role = action.content.split(":")[0].strip()
+                    self.llm.update_system_prompt(action.content)
 
                 case "write_output":
-                    logging.info(f"Agent {self.agent_id} wrote output: {action.content}")
-                    self.output = action.content
-                    self.status = "done"
+                    if len(action.content) > OUTPUT_CHARACTER_LIMIT:
+                        logging.error(f"Agent {self.agent_id} ({self.role}) wrote output: {action.content} is too long. It must be less than {OUTPUT_CHARACTER_LIMIT} characters.")
+                        outbound.append(Message(self.agent_id, self.agent_id, f"Output error: Previous output is {len(action.content)} characters, which exceeds the character limit of {OUTPUT_CHARACTER_LIMIT}. Please trim your output or split your responsibilities into multiple agents."))
+                    else:
+                        logging.info(f"Agent {self.agent_id} ({self.role}) wrote output: {action.content}")
+                        self.output = action.content
+                        self.status = "done"
 
                 case "message":
-                    logging.info(f"Agent {self.agent_id} sent message to Agent {action.recipient_id}: {action.content}")
+                    logging.info(f"Agent {self.agent_id} ({self.role}) sent message to Agent {action.recipient_id}: {action.content}")
                     if action.recipient_id != self.agent_id: #reject messages to self
                         outbound.append(Message(self.agent_id, action.recipient_id, action.content))
 
                 case "create_agent":
-                    logging.info(f"Agent {self.agent_id} created agent: {action.content}")
+                    logging.info(f"Agent {self.agent_id} ({self.role}) created agent: {action.content}")
                     spawn_roles.append(action.content)
 
+                case "delete_agent":
+                    logging.info(f"Agent {self.agent_id} ({self.role}) deleted agent: {action.content}")
+                    # TODO
+
                 case "query_output":
-                    logging.info(f"Agent {self.agent_id} queried output from Agent {action.recipient_id}")
+                    logging.info(f"Agent {self.agent_id} ({self.role}) queried output from Agent {action.recipient_id}")
                     requested_agent = None
                     for agent in agents:
                         if agent.agent_id == action.recipient_id:
@@ -60,15 +70,15 @@ class GenericAgent:
                             requested_output = agent.output
                             break
                     if requested_agent is None:
-                        logging.error(f"Agent {self.agent_id} requested output from Agent {action.recipient_id}, but they do not exist.")
+                        logging.error(f"Agent {self.agent_id} ({self.role}) requested output from Agent {action.recipient_id}, but they do not exist.")
                     elif requested_agent.status == "done":
                         outbound.append(Message(self.agent_id, self.agent_id, f"Requested output from Agent {action.recipient_id}: {requested_output}"))
                     else:
-                        logging.info(f"Agent {self.agent_id} requested output from Agent {action.recipient_id}, but they are not done.")
+                        logging.info(f"Agent {self.agent_id} ({self.role}) requested output from Agent {action.recipient_id}, but they are not done.")
 
                 case "call_tool":
                     if self.mcp is None:
-                        logging.error(f"Agent {self.agent_id} called a tool, but MCP is not configured.")
+                        logging.error(f"Agent {self.agent_id} ({self.role}) called a tool, but MCP is not configured.")
                         outbound.append(Message(self.agent_id, self.agent_id, "Tool error: MCP is not configured."))
                         continue
                     try:

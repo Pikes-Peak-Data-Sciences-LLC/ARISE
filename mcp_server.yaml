@@ -5,3 +5,9 @@ servers:
     args:
       - "-m"
       - "ARISE.mcp.servers.weather"
+  hotels:
+    enabled: true
+    command: python
+    args:
+      - "-m"
+      - "ARISE.mcp.servers.hotels"

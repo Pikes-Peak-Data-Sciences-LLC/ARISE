@@ -52,15 +52,13 @@ mesh.py -contains all agent objects, runs message and turn taking behavior
 
 ### TODOs:
 
--Simulate more tool calls
+-allow for task changes midway through
 
--Agents need the ability to delete other agents
+-Give agents the ability to delete other agents
 
 -Error handling long context window, and when response > max tokens
 
 -Improve nudges. Agents can sometimes recieve a nudge message when important messages are in queue.
-
--Improve token efficiency. Agents currently see their entire conversation history, which gets expensive. Only remember up to a certain point.
 
 -Increase safeguards. ie. agents should not be able to write output twice in one turn, or message the same agent twice in one turn.
 

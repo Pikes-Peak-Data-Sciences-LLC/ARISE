@@ -35,7 +35,7 @@ class ARISEMesh:
         return all(agent.status == "done" for agent in self.agents)
 
     def all_agents_have_roles(self) -> bool:
-        return all(agent.role is not None for agent in self.agents)
+        return all(agent.role != "unassigned" for agent in self.agents)
 
     def _run_round(self, wake: list[int], steps: int) -> tuple[list[int], int]:
         while (wake or not self.agents_finished()) and steps < self._max_steps:
@@ -46,7 +46,7 @@ class ARISEMesh:
                             Message(sender_id=-1, recipient_id=agent.agent_id, content=nudge_prompt(self))
                         )
                         wake.append(agent.agent_id)
-                        break
+                        break # nudge only the first active agent
 
             agent_id = wake.pop(0)
             inbox = self.mailboxes[agent_id]

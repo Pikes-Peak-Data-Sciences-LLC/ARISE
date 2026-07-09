@@ -38,6 +38,39 @@ def parse_tool_call(content: str) -> tuple[str, str, dict]:
     return str(server), str(tool), args
 
 
+def _format_tool_args(input_schema: dict | None) -> str:
+    if not input_schema:
+        return "  Args: none"
+    properties = input_schema.get("properties") or {}
+    if not properties:
+        return "  Args: none"
+    required = set(input_schema.get("required") or [])
+    arg_lines: list[str] = []
+    for name, spec in properties.items():
+        if not isinstance(spec, dict):
+            arg_lines.append(f"  - {name}")
+            continue
+        arg_type = spec.get("type", "any")
+        requirement = "required" if name in required else "optional"
+        details = [arg_type, requirement]
+        if "default" in spec:
+            details.append(f"default={spec['default']!r}")
+        description = (spec.get("description") or "").strip()
+        line = f"  - {name} ({', '.join(details)})"
+        if description:
+            line += f": {description}"
+        arg_lines.append(line)
+    return "\n".join(arg_lines)
+
+
+def _format_tool_prompt(server_id: str, tool) -> str:
+    description = (tool.description or "").strip()
+    header = f"- {server_id}/{tool.name}"
+    if description:
+        header += f": {description}"
+    return f"{header}\n{_format_tool_args(getattr(tool, 'inputSchema', None))}"
+
+
 class MCPManager:
     def __init__(self, servers: list[MCPServerConfig]) -> None:
         self._servers = {server.id: server for server in servers}
@@ -80,7 +113,7 @@ class MCPManager:
 
     def tools_prompt(self) -> str:
         lines = [
-            f"- {server_id}/{tool.name}: {(tool.description or '').strip()}"
+            _format_tool_prompt(server_id, tool)
             for server_id, tools in self._tools.items()
             for tool in tools
         ]
