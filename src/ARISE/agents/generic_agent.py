@@ -1,13 +1,16 @@
 from __future__ import annotations
 
+import logging
+import json
 from typing import Literal
 
 from ARISE.agents.prompts import build_user_prompt
+from ARISE.config import OUTPUT_CHARACTER_LIMIT
 from ARISE.llm.client import BedrockClient
 from ARISE.mcp.manager import MCPManager, parse_tool_call
 from ARISE.models.schema import Message
-from ARISE.config import OUTPUT_CHARACTER_LIMIT
-import logging
+
+logger = logging.getLogger(__name__)
 
 
 class GenericAgent:
@@ -18,17 +21,15 @@ class GenericAgent:
         self.role: str | None = None
         self.output: str | None = None
         self.status: Literal["active", "done"] = "active"
-        logger = logging.getLogger(__name__)
 
     def __str__(self) -> str:
-        return (
-            f"Agent {self.agent_id}: {self.role}, Status={self.status}"
-        )
+        return f"Agent {self.agent_id}: {self.role}, Status={self.status}"
 
     def take_turn(self, inbox: list[Message], agents: list[GenericAgent],) -> tuple[list[Message], list[str]]:
         logging.info(f"Agent {self.agent_id} ({self.role}) has received the following messages:")
         [logging.info(message) for message in inbox]
         actions = self.llm.parse_turn(build_user_prompt(inbox, agents,self.agent_id))
+        self.write_to_json(actions)
 
         outbound: list[Message] = []
         spawn_roles: list[str] = []
@@ -78,18 +79,12 @@ class GenericAgent:
 
                 case "call_tool":
                     if self.mcp is None:
-                        logging.error(f"Agent {self.agent_id} ({self.role}) called a tool, but MCP is not configured.")
-                        outbound.append(Message(self.agent_id, self.agent_id, "Tool error: MCP is not configured."))
+                        logger.error("Agent %s called a tool, but MCP is not configured", self.agent_id)
+                        outbound.append(self._self_message("Tool error: MCP is not configured."))
                         continue
                     try:
                         server_id, tool_name, arguments = parse_tool_call(action.content)
-                        logging.info(
-                            "Agent %s called tool %s/%s with args %s",
-                            self.agent_id,
-                            server_id,
-                            tool_name,
-                            arguments,
-                        )
+                        logger.info("Agent %s called tool %s/%s with args %s", self.agent_id, server_id,tool_name,arguments,)
                         result = self.mcp.call_tool(server_id, tool_name, arguments)
                         outbound.append(
                             Message(
@@ -105,3 +100,8 @@ class GenericAgent:
                         )
 
         return outbound, spawn_roles
+    
+    def write_to_json(self, lines: dict):
+        with open('action_log.jsonl', mode='a') as file:
+            for line in lines:
+                file.write(json.dumps({"agent_id": self.agent_id, "agent_role": self.role,"action": line.action, "recipient_id": line.recipient_id, "content": line.content}) + "\n")

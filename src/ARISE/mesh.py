@@ -6,9 +6,11 @@ from ARISE.agents.generic_agent import GenericAgent
 from ARISE.agents.prompts import nudge_prompt, rework_prompt, system_prompt
 from ARISE.config import MAX_STEPS, REWORK_PASSES
 from ARISE.llm.client import BedrockClient
-from ARISE.mcp.registry import load_mcp_servers
 from ARISE.mcp.manager import MCPManager
+from ARISE.mcp.registry import load_mcp_servers
 from ARISE.models.schema import Message
+
+logger = logging.getLogger(__name__)
 
 
 class ARISEMesh:
@@ -35,18 +37,29 @@ class ARISEMesh:
         return all(agent.status == "done" for agent in self.agents)
 
     def all_agents_have_roles(self) -> bool:
-        return all(agent.role != "unassigned" for agent in self.agents)
+        return all(agent.role is not None for agent in self.agents)
+
+    def _deliver_messages(self, outbound: list[Message], wake: list[int]) -> None:
+        for message in outbound:
+            if message.recipient_id < 0 or message.recipient_id >= len(self.agents):
+                logger.error("Invalid recipient id: %s", message.recipient_id)
+                continue
+            self.mailboxes[message.recipient_id].append(message)
+            wake.append(message.recipient_id)
+
+    def _nudge_next_active_agent(self, wake: list[int]) -> None:
+        for agent in self.agents:
+            if agent.status == "active":
+                self.mailboxes[agent.agent_id].append(
+                    Message(sender_id=-1, recipient_id=agent.agent_id, content=nudge_prompt(self))
+                )
+                wake.append(agent.agent_id)
+                break
 
     def _run_round(self, wake: list[int], steps: int) -> tuple[list[int], int]:
         while (wake or not self.agents_finished()) and steps < self._max_steps:
             if not wake:
-                for agent in self.agents:
-                    if agent.status == "active":
-                        self.mailboxes[agent.agent_id].append(
-                            Message(sender_id=-1, recipient_id=agent.agent_id, content=nudge_prompt(self))
-                        )
-                        wake.append(agent.agent_id)
-                        break # nudge only the first active agent
+                self._nudge_next_active_agent(wake)
 
             agent_id = wake.pop(0)
             inbox = self.mailboxes[agent_id]
@@ -57,13 +70,7 @@ class ARISEMesh:
                 continue
 
             outbound, spawn_roles = self.agents[agent_id].take_turn(inbox, self.agents)
-
-            for message in outbound:
-                if message.recipient_id < 0 or message.recipient_id >= len(self.agents):
-                    logging.error(f"Invalid recipient id: {message.recipient_id}")
-                    continue
-                self.mailboxes[message.recipient_id].append(message)
-                wake.append(message.recipient_id)
+            self._deliver_messages(outbound, wake)
 
             for role in spawn_roles:
                 self.spawn_agent(role)
@@ -78,7 +85,13 @@ class ARISEMesh:
         wake: list[int] = []
         for agent in self.agents:
             agent.status = "active"
-            self.mailboxes[agent.agent_id].append(Message(sender_id=-1, recipient_id=agent.agent_id, content=rework_prompt(self, agent.agent_id)))
+            self.mailboxes[agent.agent_id].append(
+                Message(
+                    sender_id=-1,
+                    recipient_id=agent.agent_id,
+                    content=rework_prompt(self, agent.agent_id),
+                )
+            )
             wake.append(agent.agent_id)
         return wake
 

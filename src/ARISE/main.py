@@ -24,11 +24,6 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=MAX_AGENTS,
         help=f"Maximum number of agents allowed (default: {MAX_AGENTS}).",
     )
-    parser.add_argument(
-        '--verbose',
-        action='store_true',
-        help='Log all actions and messages.',
-    )
     args = parser.parse_args(argv)
 
     if args.num_agents < 1:
@@ -42,7 +37,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 def main(argv: list[str] | None = None) -> int:
     try:
         args = parse_args(argv)
-        logging.basicConfig(filename='arise.log', level=logging.INFO if args.verbose else logging.INFO) #verbose doesnt do anything right now
+        logging.basicConfig(filename='arise.log', level=logging.INFO)
         logging.info(f"="* 100)
         logging.info(f"Starting ARISE")
         logging.info(f"="* 100)

@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from typing import Any
 
 import boto3
 
 from ARISE.config import AWS_REGION,BEDROCK_MODEL,MAX_RETRIES,MAX_TOKENS,MEMORY_WINDOW,OUTPUT_CHARACTER_LIMIT,TEMPERATURE,resolve_bedrock_model_id
 from ARISE.models.schema import AgentAction, TurnResponse, parse_actions
-import re
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +45,6 @@ class BedrockClient:
         self.model = resolve_bedrock_model_id(BEDROCK_MODEL, AWS_REGION)
         self.history: list[dict[str, Any]] = []
         self.memory_window = MEMORY_WINDOW
-        self.region = AWS_REGION
         self.temperature = TEMPERATURE
         self.max_tokens = MAX_TOKENS
         self.max_retries = MAX_RETRIES
@@ -73,6 +72,12 @@ class BedrockClient:
                 }
             },
         )
+
+    def _append_to_history(self, user_message: dict[str, Any], assistant_text: str) -> None:
+        self.history.append(user_message)
+        self.history.append({"role": "assistant", "content": [{"text": assistant_text}]})
+        while len(self.history) > self.memory_window:
+            self.history.pop(0)
 
     def complete(self, user_message: str) -> str:
         attempt_message = user_message
@@ -104,10 +109,7 @@ class BedrockClient:
                     f"Model response did not include text output (stopReason={stop_reason})"
                 )
 
-            if len(self.history) > self.memory_window:
-                self.history.pop(0)
-            self.history.append(new_message)
-            self.history.append({"role": "assistant", "content": [{"text": assistant_text}]})
+            self._append_to_history(new_message, assistant_text)
             return assistant_text
 
         raise ValueError(f"Model response exceeded max tokens after {max_attempts} attempt(s)")
@@ -122,6 +124,5 @@ class BedrockClient:
             logger.error(f"Agent answer: {agent_answer}")
             raise e
 
-    def update_system_prompt(self, new_role: str) -> str:
-        new_prompt = re.sub(r'<[^>]*>', f"<{new_role}>", self.system_prompt)
-        self.system_prompt = new_prompt
+    def update_system_prompt(self, new_role: str) -> None:
+        self.system_prompt = re.sub(r"<[^>]*>", f"<{new_role}>", self.system_prompt, count=1)

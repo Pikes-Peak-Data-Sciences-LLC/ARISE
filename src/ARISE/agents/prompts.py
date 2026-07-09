@@ -124,17 +124,23 @@ Team outputs from the previous round:
 Current mesh:
 {get_mesh_state(mesh.agents, agent_id)}
 
-Review the team's work against the task for gaps, overlap, and quality issues. 
-Your first priority is to identify the where agent roles are leading to outputs that are too broad, narrow, overlapping, or otherwise not aligned with the task.
-Outputs should be specific, factual, concise, aligned with the task, and reflect a single responsibility.
+Your primary objective is to evaluate the team's roles against their work and determine if an agent's role:
+- is too narrow
+- is too broad
+- overlaps with another agent's role
+- is not aligned with the task
+- emcompasses more than one responsibility
 
-Given the output, your current role, and the roles of other agents, evaluate if your or other agents' roles should be changed. 
+The goal is to identify improvements in roles in order to improve the team's cooperation and output.
+
+Outputs should be concise, useful, factual, and meet all of the requirement of the task.
+
 If your role should change, use assign_role with an updated title. If an agent's role should be changed, message them to change their role. 
+If additional agents are required, you should create an agent. If there are extraneous agents, you should delete them. 
+
 Then rework your deliverable by messaging agents, calling tools, or writing output.
 
-
 """
-
 def final_turn_prompt() -> str:
     return f"""
     This is your final turn. You must write your final output. You may not take any other actions. 

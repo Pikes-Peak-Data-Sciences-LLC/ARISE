@@ -12,10 +12,6 @@ class Message:
     recipient_id: int
     content: str
 
-    def __repr__(self) -> str:
-        return f"\tMessage from Agent {self.sender_id} to Agent {self.recipient_id}: {self.content}\n"
-
-
 class AgentAction(BaseModel):
     action: Literal["message", "assign_role", "write_output", "create_agent", "query_output", "call_tool"]
     content: str
@@ -32,15 +28,6 @@ class AgentAction(BaseModel):
         if self.action == "call_tool" and not self.content.strip():
             raise ValueError("content is required for call_tool")
         return self
-
-    def __repr__(self) -> str:
-        if self.action in ("message", "query_output"):
-            return f"\tAction {self.action} to Agent {self.recipient_id}: {self.content}\n"
-        return f"\tAction {self.action}: {self.content}\n"
-
-    def __str__(self) -> str:
-        return self.__repr__()
-
 
 class TurnResponse(BaseModel):
     actions: list[AgentAction]
