@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 
 from ARISE.agents.generic_agent import GenericAgent
-from ARISE.agents.prompts import nudge_prompt, rework_prompt, system_prompt
+from ARISE.agents.prompts import new_task_prompt, nudge_prompt, rework_prompt, system_prompt
 from ARISE.config import MAX_STEPS, REWORK_PASSES
 from ARISE.llm.client import BedrockClient
 from ARISE.mcp.manager import MCPManager
@@ -32,6 +32,7 @@ class ARISEMesh:
         self.mailboxes = {agent.agent_id: [] for agent in self.agents}
         self._max_steps = MAX_STEPS
         self.rework_round = 0
+        self._pending_wake: list[int] | None = None
 
     def agents_finished(self) -> bool:
         return all(agent.status == "done" for agent in self.agents)
@@ -95,30 +96,52 @@ class ARISEMesh:
             wake.append(agent.agent_id)
         return wake
 
-    def _start_new_task(self) -> list[int]:
-        # TODO: implement 
+    def begin_new_task(self, task: str) -> None:
+        """Reset agent status and queue a new task for the existing mesh."""
+        logging.info("Starting new task: %s", task)
+        self.input_text = task
+        self.rework_round = 0
+        self.mailboxes = {agent.agent_id: [] for agent in self.agents}
+        n = len(self.agents)
+        tools_prompt = self.mcp.tools_prompt()
+        for agent in self.agents:
+            agent.status = "active"
+            agent.output = None
+            agent.llm.system_prompt = system_prompt(
+                agent.agent_id, n, self.max_agents, task, tools_prompt
+            )
+            if agent.role:
+                agent.llm.update_system_prompt(agent.role)
+        self.mailboxes[0].append(
+            Message(sender_id=-1, recipient_id=0, content=new_task_prompt(task))
+        )
+        self._pending_wake = [0]
 
     def run(self) -> list[GenericAgent]:
-        try:
+        if self._pending_wake is not None:
+            wake = self._pending_wake
+            self._pending_wake = None
+        else:
             self.mailboxes[0].append(
                 Message(sender_id=-1, recipient_id=0, content="Begin by assigning yourself a role.")
             )
             wake = [0]
-            steps = 0
+        steps = 0
 
-            while True:
-                wake, steps = self._run_round(wake, steps)
+        while True:
+            wake, steps = self._run_round(wake, steps)
 
-                if not self.agents_finished():
-                    break
-                if self.rework_round >= REWORK_PASSES:
-                    break
+            if not self.agents_finished():
+                break
+            if self.rework_round >= REWORK_PASSES:
+                break
 
-                wake = self._start_rework()
+            wake = self._start_rework()
 
-            return self.agents
-        finally:
-            self.mcp.stop()
+        return self.agents
+
+    def shutdown(self) -> None:
+        self.mcp.stop()
 
     def spawn_agent(self, _role: str) -> None:
         if len(self.agents) >= self.max_agents:

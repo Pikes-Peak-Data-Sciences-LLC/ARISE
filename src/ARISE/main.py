@@ -34,7 +34,17 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return args
 
 
+def _log_agents(agents) -> None:
+    logging.info("=" * 100)
+    logging.info("Final Agents:")
+    for agent in agents:
+        logging.info(f"{agent}")
+    for agent in agents:
+        logging.info(f"Agent {agent.agent_id} output: {agent.output}")
+
+
 def main(argv: list[str] | None = None) -> int:
+    mesh = None
     try:
         args = parse_args(argv)
         logging.basicConfig(filename='arise.log', level=logging.INFO)
@@ -43,15 +53,22 @@ def main(argv: list[str] | None = None) -> int:
         logging.info(f"="* 100)
         logging.info(f"Input text: {args.input_text}")
         mesh = ARISEMesh(args.input_text, args.num_agents, args.max_agents)
-        final_agents = mesh.run()
 
-        # log final outputs of agents
-        logging.info(f"="* 100)
-        logging.info(f"Final Agents:")
-        for agent in final_agents:
-            logging.info(f"{agent}")
-        for agent in final_agents:
-            logging.info(f"Agent {agent.agent_id} output: {agent.output}")
+        while True:
+            final_agents = mesh.run()
+            _log_agents(final_agents)
+
+            try:
+                new_task = input("\nEnter a new task (empty to quit): ").strip()
+            except EOFError:
+                break
+            if not new_task:
+                break
+
+            logging.info("=" * 100)
+            logging.info("New task: %s", new_task)
+            mesh.begin_new_task(new_task)
+
         return 0
     except ValueError as exc:
         logging.error(f"error: {exc}")
@@ -59,6 +76,9 @@ def main(argv: list[str] | None = None) -> int:
     except Exception as exc:
         logging.error(f"error: {exc}")
         return 1
+    finally:
+        if mesh is not None:
+            mesh.shutdown()
 
 
 if __name__ == "__main__":

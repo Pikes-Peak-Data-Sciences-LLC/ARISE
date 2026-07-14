@@ -3,12 +3,14 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import threading
 from collections.abc import Awaitable, Callable
 
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
+from ARISE.config import PROJECT_ROOT
 from ARISE.mcp.registry import MCPServerConfig
 
 logger = logging.getLogger(__name__)
@@ -128,12 +130,24 @@ class MCPManager:
     def _run(self, coro):
         return asyncio.run_coroutine_threadsafe(coro, self._loop).result()
 
+    def _server_env(self) -> dict[str, str]:
+        """Ensure MCP subprocesses can import the ARISE package (e.g. via run.py)."""
+        env = os.environ.copy()
+        src = str(PROJECT_ROOT / "src")
+        existing = env.get("PYTHONPATH", "")
+        env["PYTHONPATH"] = src if not existing else f"{src}{os.pathsep}{existing}"
+        return env
+
     async def _with_session(
         self,
         server: MCPServerConfig,
         fn: Callable[[ClientSession], Awaitable],
     ):
-        params = StdioServerParameters(command=server.command, args=server.args)
+        params = StdioServerParameters(
+            command=server.command,
+            args=server.args,
+            env=self._server_env(),
+        )
         async with stdio_client(params) as (read, write):
             async with ClientSession(read, write) as session:
                 await session.initialize()
