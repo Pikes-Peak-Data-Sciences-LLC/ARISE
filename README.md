@@ -63,5 +63,3 @@ mesh.py -contains all agent objects, runs message and turn taking behavior
 -Increase safeguards. ie. agents should not be able to write output twice in one turn, or message the same agent twice in one turn.
 
 -Max steps safeguard. Right before max steps, agents should be forced to make output. 
-
--Create visualization and/or improved output viewing. All outputs currently go to log file, which is messy. 

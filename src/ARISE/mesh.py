@@ -95,6 +95,9 @@ class ARISEMesh:
             wake.append(agent.agent_id)
         return wake
 
+    def _start_new_task(self) -> list[int]:
+        # TODO: implement 
+
     def run(self) -> list[GenericAgent]:
         try:
             self.mailboxes[0].append(

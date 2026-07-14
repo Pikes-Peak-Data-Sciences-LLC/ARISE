@@ -145,3 +145,12 @@ def final_turn_prompt() -> str:
     return f"""
     This is your final turn. You must write your final output. You may not take any other actions. 
     """
+
+
+def new_task_prompt(task: str) -> str:
+    return f"""
+    You have been give a new task:
+    {task}
+
+    Update the roles of the agents to reflect the new task and begin work on this new task.
+    """
