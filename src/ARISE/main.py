@@ -42,6 +42,10 @@ def _log_agents(agents) -> None:
     for agent in agents:
         logging.info(f"Agent {agent.agent_id} output: {agent.output}")
 
+def clear_log() -> None:
+    with open('action_log.jsonl', 'w') as file:
+        file.write('')
+
 
 def main(argv: list[str] | None = None) -> int:
     mesh = None
@@ -53,7 +57,8 @@ def main(argv: list[str] | None = None) -> int:
         logging.info(f"="* 100)
         logging.info(f"Input text: {args.input_text}")
         mesh = ARISEMesh(args.input_text, args.num_agents, args.max_agents)
-
+        clear_log()
+        
         while True:
             final_agents = mesh.run()
             _log_agents(final_agents)

@@ -4,12 +4,21 @@ from __future__ import annotations
 
 import json
 import logging
-import re
 from typing import Any
 
 import boto3
 
-from ARISE.config import AWS_REGION,BEDROCK_MODEL,MAX_RETRIES,MAX_TOKENS,MEMORY_WINDOW,OUTPUT_CHARACTER_LIMIT,TEMPERATURE,resolve_bedrock_model_id
+from ARISE.agents.prompts import system_prompt
+from ARISE.config import (
+    AWS_REGION,
+    BEDROCK_MODEL,
+    MAX_RETRIES,
+    MAX_TOKENS,
+    MEMORY_WINDOW,
+    OUTPUT_CHARACTER_LIMIT,
+    TEMPERATURE,
+    resolve_bedrock_model_id,
+)
 from ARISE.models.schema import AgentAction, TurnResponse, parse_actions
 
 logger = logging.getLogger(__name__)
@@ -40,8 +49,16 @@ def _bedrock_json_schema() -> str:
 
 
 class BedrockClient:
-    def __init__(self, system_prompt: str) -> None:
-        self.system_prompt = system_prompt
+    def __init__(self, agent_id: int, num_agents: int, max_agents: int, task: str, tools: str = "None.", role: str | None = None) -> None:
+        self.agent_id = agent_id
+        self.num_agents = num_agents
+        self.max_agents = max_agents
+        self.task = task
+        self.tools = tools
+        self.role = role
+        self.system_prompt = ""
+        self._rebuild_system_prompt()
+
         self.model = resolve_bedrock_model_id(BEDROCK_MODEL, AWS_REGION)
         self.history: list[dict[str, Any]] = []
         self.memory_window = MEMORY_WINDOW
@@ -49,6 +66,25 @@ class BedrockClient:
         self.max_tokens = MAX_TOKENS
         self.max_retries = MAX_RETRIES
         self._client = boto3.client("bedrock-runtime", region_name=AWS_REGION)
+
+    def _rebuild_system_prompt(self) -> None:
+        self.system_prompt = system_prompt(self.agent_id, self.num_agents, self.max_agents, self.task, self.tools, self.role)
+
+    def set_role(self, role: str) -> None:
+        self.role = role
+        self._rebuild_system_prompt()
+
+    def set_num_agents(self, num_agents: int) -> None:
+        self.num_agents = num_agents
+        self._rebuild_system_prompt()
+
+    def set_task(self, task: str) -> None:
+        self.task = task
+        self._rebuild_system_prompt()
+
+    def set_tools(self, tools: str) -> None:
+        self.tools = tools
+        self._rebuild_system_prompt()
 
     def _converse(self, messages: list[dict[str, Any]]) -> dict[str, Any]:
         return self._client.converse(
@@ -123,6 +159,3 @@ class BedrockClient:
             logger.error(f"Error parsing JSON response: {e}")
             logger.error(f"Agent answer: {agent_answer}")
             raise e
-
-    def update_system_prompt(self, new_role: str) -> None:
-        self.system_prompt = re.sub(r"<[^>]*>", f"<{new_role}>", self.system_prompt, count=1)

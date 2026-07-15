@@ -13,7 +13,7 @@ class Message:
     content: str
 
 class AgentAction(BaseModel):
-    action: Literal["message", "assign_role", "write_output", "create_agent", "query_output", "call_tool"]
+    action: Literal["message", "assign_role", "write_output", "create_agent", "query_output", "call_tool", "delete_agent"]
     content: str
     recipient_id: int
 
@@ -27,6 +27,8 @@ class AgentAction(BaseModel):
             raise ValueError(f"recipient_id must be -1 for {self.action}")
         if self.action == "call_tool" and not self.content.strip():
             raise ValueError("content is required for call_tool")
+        if self.action == "delete_agent" and self.recipient_id < 0:
+            raise ValueError("recipient_id must be a valid agent ID for delete_agent")
         return self
 
 class TurnResponse(BaseModel):

@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 
 from ARISE.agents.generic_agent import GenericAgent
-from ARISE.agents.prompts import new_task_prompt, nudge_prompt, rework_prompt, system_prompt
+from ARISE.agents.prompts import new_task_prompt, nudge_prompt, rework_prompt
 from ARISE.config import MAX_STEPS, REWORK_PASSES
 from ARISE.llm.client import BedrockClient
 from ARISE.mcp.manager import MCPManager
@@ -24,7 +24,13 @@ class ARISEMesh:
         self.agents = [
             GenericAgent(
                 agent_id=i,
-                llm=BedrockClient(system_prompt(i, num_agents, max_agents, input_text, tools_prompt)),
+                llm=BedrockClient(
+                    agent_id=i,
+                    num_agents=num_agents,
+                    max_agents=max_agents,
+                    task=input_text,
+                    tools=tools_prompt,
+                ),
                 mcp=self.mcp,
             )
             for i in range(num_agents)
@@ -33,6 +39,12 @@ class ARISEMesh:
         self._max_steps = MAX_STEPS
         self.rework_round = 0
         self._pending_wake: list[int] | None = None
+
+    def _refresh_mesh_size(self) -> None:
+        n = len(self.agents)
+        self.num_agents = n
+        for agent in self.agents:
+            agent.llm.set_num_agents(n)
 
     def agents_finished(self) -> bool:
         return all(agent.status == "done" for agent in self.agents)
@@ -102,16 +114,14 @@ class ARISEMesh:
         self.input_text = task
         self.rework_round = 0
         self.mailboxes = {agent.agent_id: [] for agent in self.agents}
-        n = len(self.agents)
         tools_prompt = self.mcp.tools_prompt()
+        n = len(self.agents)
         for agent in self.agents:
             agent.status = "active"
             agent.output = None
-            agent.llm.system_prompt = system_prompt(
-                agent.agent_id, n, self.max_agents, task, tools_prompt
-            )
-            if agent.role:
-                agent.llm.update_system_prompt(agent.role)
+            agent.llm.set_task(task)
+            agent.llm.set_tools(tools_prompt)
+            agent.llm.set_num_agents(n)
         self.mailboxes[0].append(
             Message(sender_id=-1, recipient_id=0, content=new_task_prompt(task))
         )
@@ -148,7 +158,12 @@ class ARISEMesh:
             return
         new_id = len(self.agents)
         llm = BedrockClient(
-            system_prompt(new_id, new_id + 1, self.max_agents, self.input_text, self.mcp.tools_prompt())
+            agent_id=new_id,
+            num_agents=new_id + 1,
+            max_agents=self.max_agents,
+            task=self.input_text,
+            tools=self.mcp.tools_prompt(),
         )
         self.agents.append(GenericAgent(agent_id=new_id, llm=llm, mcp=self.mcp))
         self.mailboxes[new_id] = []
+        self._refresh_mesh_size()

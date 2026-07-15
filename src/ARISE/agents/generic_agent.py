@@ -38,7 +38,7 @@ class GenericAgent:
                 case "assign_role":
                     logging.info(f"Agent {self.agent_id} assigned role: {action.content}")
                     self.role = action.content.split(":")[0].strip()
-                    self.llm.update_system_prompt(action.content)
+                    self.llm.set_role(action.content)
 
                 case "write_output":
                     if len(action.content) > OUTPUT_CHARACTER_LIMIT:
