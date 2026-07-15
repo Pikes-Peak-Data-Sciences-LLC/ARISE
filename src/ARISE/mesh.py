@@ -185,7 +185,11 @@ class ARISEMesh:
             tools=self.mcp.tools_prompt(),
         )
         self.agents.append(GenericAgent(agent_id=new_id, llm=llm, mcp=self.mcp))
-        self.mailboxes[new_id] = []
+        self.mailboxes[new_id] = [Message(
+                    sender_id=-1,
+                    recipient_id=new_id,
+                    content=f"You are now an active agent, you have been suggested a role of {_role}.",
+                )]
         self._refresh_mesh_size()
 
     def delete_agent(self, agent_id: int, wake: list[int] | None = None) -> None:

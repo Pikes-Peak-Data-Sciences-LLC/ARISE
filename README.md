@@ -99,9 +99,8 @@ src/ARISE/
 - Force `write_output` near `MAX_STEPS`
 - Improve nudge behavior (nudges can sometimes occur when mail is in queue)
 - Per-turn action limits (e.g. one `write_output`, no duplicate messages to the same peer)
-- Tool-call budgeting / oversight (no limited on how often tools can be called and when)
-- Implement role suggestion on agent spawn (role suggestion is currently unused)
-- Improve agent spawning behavior (agents are reluctant to cede responsibility)
+- Tool-call budgeting / oversight (currently no limits on how often tools can be called and when)
+- Improve agent spawning behavior (agents are reluctant to cede responsibility or create new agents)
 - Add Hard Role-similarity checks (e.g. embeddings) to flag overlaps without relying only on the LLM
 - Better error handling for rate limits, context-window overflow, and max-token truncation
 - GUI for observing mesh behavior live
