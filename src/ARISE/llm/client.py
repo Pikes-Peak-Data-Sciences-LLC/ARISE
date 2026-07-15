@@ -112,8 +112,9 @@ class BedrockClient:
     def _append_to_history(self, user_message: dict[str, Any], assistant_text: str) -> None:
         self.history.append(user_message)
         self.history.append({"role": "assistant", "content": [{"text": assistant_text}]})
-        while len(self.history) > self.memory_window:
-            self.history.pop(0)
+        if self.memory_window > 0:
+            while len(self.history) > self.memory_window:
+                self.history.pop(0)
 
     def complete(self, user_message: str) -> str:
         attempt_message = user_message

@@ -22,10 +22,10 @@ MCP_SERVERS_PATH = PROJECT_ROOT / "mcp_server.yaml"
 
 DEFAULT_AGENTS = 3 # the number of agents to start with
 MAX_AGENTS = 10 # the maximum number of agents allowed
-MEMORY_WINDOW = 30 # the number of previous turns to keep in memory
+MEMORY_WINDOW = 30 # the number of previous turns to keep in memory. Set to -1 to disable "forgetting".
 OUTPUT_CHARACTER_LIMIT = 10000 # the maximum number of characters allowed in an output. This should be < MAX_TOKENS * 4.
 MAX_STEPS = 1000 # the maximum number of steps allowed overall
-REWORK_PASSES = 0 # the number of rework cycles
+REWORK_PASSES = 1 # the number of rework cycles
 
 # LLM parameters
 MAX_TOKENS = 8192
