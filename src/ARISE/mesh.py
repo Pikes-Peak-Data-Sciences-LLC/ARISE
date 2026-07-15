@@ -46,6 +46,12 @@ class ARISEMesh:
         for agent in self.agents:
             agent.llm.set_num_agents(n)
 
+    def _get_agent(self, agent_id: int) -> GenericAgent | None:
+        for agent in self.agents:
+            if agent.agent_id == agent_id:
+                return agent
+        return None
+
     def agents_finished(self) -> bool:
         return all(agent.status == "done" for agent in self.agents)
 
@@ -54,7 +60,7 @@ class ARISEMesh:
 
     def _deliver_messages(self, outbound: list[Message], wake: list[int]) -> None:
         for message in outbound:
-            if message.recipient_id < 0 or message.recipient_id >= len(self.agents):
+            if message.recipient_id not in self.mailboxes:
                 logger.error("Invalid recipient id: %s", message.recipient_id)
                 continue
             self.mailboxes[message.recipient_id].append(message)
@@ -75,6 +81,11 @@ class ARISEMesh:
                 self._nudge_next_active_agent(wake)
 
             agent_id = wake.pop(0)
+            agent = self._get_agent(agent_id)
+            if agent is None or agent_id not in self.mailboxes:
+                steps += 1
+                continue
+
             inbox = self.mailboxes[agent_id]
             self.mailboxes[agent_id] = []
 
@@ -82,11 +93,14 @@ class ARISEMesh:
                 steps += 1
                 continue
 
-            outbound, spawn_roles = self.agents[agent_id].take_turn(inbox, self.agents)
+            outbound, agent_changes = agent.take_turn(inbox, self.agents)
             self._deliver_messages(outbound, wake)
 
-            for role in spawn_roles:
-                self.spawn_agent(role)
+            for change in agent_changes:
+                if change.action == "create_agent":
+                    self.spawn_agent(change.content)
+                elif change.action == "delete_agent":
+                    self.delete_agent(change.recipient_id, wake)
 
             steps += 1
 
@@ -122,20 +136,26 @@ class ARISEMesh:
             agent.llm.set_task(task)
             agent.llm.set_tools(tools_prompt)
             agent.llm.set_num_agents(n)
-        self.mailboxes[0].append(
-            Message(sender_id=-1, recipient_id=0, content=new_task_prompt(task))
+        starter_id = self.agents[0].agent_id
+        self.mailboxes[starter_id].append(
+            Message(sender_id=-1, recipient_id=starter_id, content=new_task_prompt(task))
         )
-        self._pending_wake = [0]
+        self._pending_wake = [starter_id]
 
     def run(self) -> list[GenericAgent]:
         if self._pending_wake is not None:
             wake = self._pending_wake
             self._pending_wake = None
         else:
-            self.mailboxes[0].append(
-                Message(sender_id=-1, recipient_id=0, content="Begin by assigning yourself a role.")
+            starter_id = self.agents[0].agent_id
+            self.mailboxes[starter_id].append(
+                Message(
+                    sender_id=-1,
+                    recipient_id=starter_id,
+                    content="Begin by assigning yourself a role.",
+                )
             )
-            wake = [0]
+            wake = [starter_id]
         steps = 0
 
         while True:
@@ -156,14 +176,33 @@ class ARISEMesh:
     def spawn_agent(self, _role: str) -> None:
         if len(self.agents) >= self.max_agents:
             return
-        new_id = len(self.agents)
+        new_id = max((agent.agent_id for agent in self.agents), default=-1) + 1
         llm = BedrockClient(
             agent_id=new_id,
-            num_agents=new_id + 1,
+            num_agents=len(self.agents) + 1,
             max_agents=self.max_agents,
             task=self.input_text,
             tools=self.mcp.tools_prompt(),
         )
         self.agents.append(GenericAgent(agent_id=new_id, llm=llm, mcp=self.mcp))
         self.mailboxes[new_id] = []
+        self._refresh_mesh_size()
+
+    def delete_agent(self, agent_id: int, wake: list[int] | None = None) -> None:
+        agent = self._get_agent(agent_id)
+        if agent is None:
+            logger.error("Cannot delete invalid agent id: %s", agent_id)
+            return
+        if len(self.agents) <= 1:
+            logger.error("Cannot delete the last remaining agent")
+            return
+
+        self.agents.remove(agent)
+        self.mailboxes.pop(agent_id, None)
+        if wake is not None:
+            wake[:] = [wid for wid in wake if wid != agent_id]
+        if self._pending_wake is not None:
+            self._pending_wake = [wid for wid in self._pending_wake if wid != agent_id]
+
+        logging.info("Deleted agent %s (%s)", agent_id, agent.role)
         self._refresh_mesh_size()

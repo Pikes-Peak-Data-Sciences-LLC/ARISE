@@ -96,7 +96,6 @@ src/ARISE/
 
 ## Future work
 
-- Implement `delete_agent` (currently unimplemented)
 - Force `write_output` near `MAX_STEPS`
 - Improve nudge behavior (nudges can sometimes occur when mail is in queue)
 - Per-turn action limits (e.g. one `write_output`, no duplicate messages to the same peer)

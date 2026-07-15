@@ -32,7 +32,7 @@ class GenericAgent:
         self.write_to_json(actions)
 
         outbound: list[Message] = []
-        spawn_roles: list[str] = []
+        agent_changes: list[str] = []
         for action in actions:
             match action.action:
                 case "assign_role":
@@ -56,11 +56,11 @@ class GenericAgent:
 
                 case "create_agent":
                     logging.info(f"Agent {self.agent_id} ({self.role}) created agent: {action.content}")
-                    spawn_roles.append(action.content)
+                    agent_changes.append(action)
 
                 case "delete_agent":
-                    logging.info(f"Agent {self.agent_id} ({self.role}) deleted agent: {action.content}")
-                    # TODO
+                    logging.info(f"Agent {self.agent_id} ({self.role}) deleted agent: {action.recipient_id}")
+                    agent_changes.append(action)
 
                 case "query_output":
                     logging.info(f"Agent {self.agent_id} ({self.role}) queried output from Agent {action.recipient_id}")
@@ -99,7 +99,7 @@ class GenericAgent:
                             Message(self.agent_id, self.agent_id, f"Tool error ({action.content}): {exc}")
                         )
 
-        return outbound, spawn_roles
+        return outbound, agent_changes
     
     def write_to_json(self, lines: dict):
         with open('action_log.jsonl', mode='a') as file:
